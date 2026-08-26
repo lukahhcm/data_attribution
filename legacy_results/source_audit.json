@@ -1,0 +1,9 @@
+{
+  "source": "data_attribution_main/artifacts/results_strict_v4/audit.json",
+  "historical_audit": {
+    "status": "passed",
+    "runs": 288,
+    "errors": []
+  },
+  "interpretation": "Budget/metadata audit only; it does not validate the VF estimator or V2 protocol."
+}

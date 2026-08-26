@@ -3,10 +3,10 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "data-attribution-experiments"
+name = "data-attribution-v2"
 version = "0.1.0"
-description = "Compute-matched RHO/VF and iterative value-function data selection experiments"
-requires-python = ">=3.10"
+description = "Correctness-gated F2SA/RHO experiments for multi-round data selection"
+requires-python = ">=3.11"
 dependencies = [
   "numpy>=1.24",
   "PyYAML>=6.0",
@@ -17,11 +17,6 @@ dependencies = [
 [project.optional-dependencies]
 dev = ["pytest>=8.0", "ruff>=0.5"]
 
-[project.scripts]
-da-select = "data_attribution_exp.train_selector:main"
-da-eval = "data_attribution_exp.train_evaluator:main"
-da-rho = "data_attribution_exp.train_rho:main"
-
 [tool.setuptools.packages.find]
 where = ["src"]
 
@@ -30,4 +25,3 @@ testpaths = ["tests"]
 
 [tool.ruff]
 line-length = 100
-

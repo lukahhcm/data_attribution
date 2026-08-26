@@ -1,0 +1,65 @@
+\section{Budgeted Data Selection as Bilevel Optimization}
+\label{sec:formulation}
+
+Let $\Dtr=\{z_i\}_{i=1}^{n}$ be candidate training examples and let
+$\Dval$ be a clean holdout set. We use
+\begin{align}
+g(\vomega,\vtheta)
+    &:= \frac{1}{n}\sum_{i=1}^{n}\omega_i\ell(\vtheta;z_i),
+    &
+f(\vtheta)
+    &:= \frac{1}{|\Dval|}\sum_{z\in\Dval}\ell(\vtheta;z),
+\label{eq:fg}
+\end{align}
+and define
+\begin{equation}
+\min_{\vomega\in\Wbudget} h(\vomega)
+    := f(\thetahat(\vomega))
+\quad\text{subject to}\quad
+\thetahat(\vomega)\in
+    \argmin_{\vtheta}g(\vomega,\vtheta),
+\label{eq:bilevel-selection}
+\end{equation}
+where
+\begin{equation}
+\Wbudget:=\left\{\vomega\in[0,1]^n:
+\sum_{i=1}^{n}\omega_i=B\right\}.
+\label{eq:capped-simplex}
+\end{equation}
+The continuous vector $\vomega$ is the outer optimization state. The target
+model is trained on the discrete set
+$S(\vomega)=\operatorname{TopB}(\vomega)$ only when a training decision is
+required. The binary mask is not substituted back for $\vomega$ in the next
+outer update.
+
+The budget-feasible uniform point is
+\begin{equation}
+\vomega^{\mathrm{unif}}=\frac{B}{n}\bm{1}.
+\label{eq:uniform-budget}
+\end{equation}
+It is the appropriate reference for comparing one-shot and iterative
+selection. The all-ones vector has a useful attribution interpretation---all
+examples are fully present---but lies outside $\Wbudget$ whenever $B<n$.
+Conflating these two reference points creates an artificial first projection
+that can dominate the score update.
+
+Equation~\eqref{eq:bilevel-selection} is our optimization target, not a claim
+that the nonconvex neural-network problem satisfies the assumptions used in
+all bilevel convergence analyses. In particular, the F2SA theory assumes an
+unconstrained outer variable and a strongly convex lower problem. We use its
+value-function construction to derive an estimator, and treat projection onto
+\eqref{eq:capped-simplex} as an explicit algorithmic adaptation whose behavior
+must be tested empirically.
+
+F2SA's MNIST hyper-cleaning experiment instead optimizes unconstrained logits
+$\va\in\mathbb{R}^n$ and uses sigmoid weights $\omega_i=\sigma(a_i)$; it does
+not impose a fixed cardinality budget. To separate parameterization from the
+estimator, our primary method optimizes $\vomega$ directly with capped-simplex
+projection. As an ablation, we use
+\begin{equation}
+\omega_i=\sigma(a_i+c(\va)),
+\qquad \sum_i\sigma(a_i+c(\va))=B,
+\end{equation}
+where the scalar shift $c(\va)$ is obtained by one-dimensional root finding.
+Learning rates are tuned separately because direct weights and logits have
+different geometries.

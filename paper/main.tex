@@ -1,0 +1,64 @@
+\documentclass{article}
+\usepackage{iclr2027_conference,times}
+
+\input{math_commands.tex}
+
+\usepackage{amsmath,amssymb,booktabs,microtype,xcolor}
+\usepackage{hyperref}
+\usepackage{url}
+
+\title{From One-Shot Attribution to Iterative Data Selection}
+
+\author{Anonymous Authors}
+
+\newcommand{\Dtr}{\mathcal{D}_{\mathrm{tr}}}
+\newcommand{\Dval}{\mathcal{D}_{\mathrm{val}}}
+\newcommand{\Wbudget}{\mathcal{W}_{B}}
+\newcommand{\thetahat}{\widehat{\vtheta}}
+\newcommand{\thetatilde}{\widetilde{\vtheta}}
+\newcommand{\thetaIL}{\vtheta_{\mathrm{IL}}}
+\newcommand{\rhoideal}{s_{\mathrm{RHO}}^{\mathrm{ideal}}}
+\newcommand{\rhopractical}{s_{\mathrm{RHO}}^{\mathrm{practical}}}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+Data attribution assigns a score to each training example, whereas data
+selection must repeatedly decide which examples to train on under a finite
+budget. We connect these tasks through a common bilevel program over
+continuous example weights. In this formulation, the value-function penalty
+used by fully first-order stochastic bilevel optimization (F2SA) yields a
+two-model, per-example loss difference. The idealized form of Reducible
+Holdout Loss Selection (RHO-LOSS) has exactly the same direction at a fixed
+weight vector, while practical RHO-LOSS introduces an additional frozen
+holdout-model approximation. This distinction exposes why a one-shot
+attribution score need not solve data selection and identifies the algorithmic
+choices that can create gains in a multi-round procedure. We turn the
+connection into three falsifiable research questions: whether the predicted
+gradient correspondence holds in finite neural-network training, whether
+iterative optimization of persistent weights improves over a single score at
+uniform weights, and which approximations determine the
+performance--computation trade-off. Our experimental protocol separates
+inner-solution accuracy, outer update frequency, batch size, budget, and
+continuous-to-discrete projection, with correctness gates preceding all
+large-scale comparisons.
+\end{abstract}
+
+\input{sections/introduction}
+\input{sections/formulation}
+\input{sections/f2sa_rho}
+\input{sections/single_to_multi}
+\input{sections/research_questions}
+\input{sections/experiments}
+\input{sections/related_work}
+\input{sections/conclusion}
+
+\bibliography{iclr2027_conference}
+\bibliographystyle{iclr2027_conference}
+
+\appendix
+\input{sections/appendix}
+
+\end{document}

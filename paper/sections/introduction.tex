@@ -1,0 +1,42 @@
+\section{Introduction}
+
+Data attribution and data selection are often evaluated with similar tools but
+ask different questions. Attribution evaluates the local effect of changing
+the weight of a training example. Selection asks for a feasible subset that
+produces a good model after training, possibly over many rounds. A ranking
+obtained from one local derivative can therefore be useful for selection
+without being a solution to the selection problem.
+
+This paper makes that distinction explicit. We formulate budgeted data
+selection as bilevel optimization over continuous example weights. This view
+places influence-based attribution, unrolled differentiation, value-function
+methods, and loss-difference selectors in a shared coordinate system. We
+focus on the particularly revealing relationship between F2SA
+\citep{kwon2023f2sa} and RHO-LOSS \citep{mindermann2022rholoss}. F2SA replaces
+the implicit hypergradient with the difference between gradients evaluated at
+two lower-level solutions. When the lower objective is linear in example
+weights, each coordinate of this gradient difference is simply a difference
+of per-example losses. The ideal RHO-LOSS construction produces the same
+loss difference. Practical RHO-LOSS then freezes its second model after
+training it only on holdout data, trading fidelity for a substantial reduction
+in computation.
+
+This connection suggests a different empirical agenda from merely comparing
+attribution rankings. First, we must verify that the two inner models track
+the solutions required by the value-function argument. Second, we must test
+whether taking multiple outer steps from a persistent continuous state adds
+value beyond a single direction computed at uniform weights. Third, we must
+measure which approximations---a frozen comparator, incomplete inner solves,
+batch-local candidate pools, and Top-$B$ discretization---account for the
+observed gains or failures.
+
+Our contribution is thus a disciplined bridge rather than a blanket
+equivalence claim. We provide (i) an exact symbolic correspondence between a
+penalized value-function gradient and idealized RHO-LOSS under stated
+conditions, (ii) a local-to-global account of why one attribution direction is
+not yet a solution to budgeted data selection, and (iii) an approximation
+ladder and gated evaluation that attribute any multi-round improvement to
+target adaptation, inner tracking, persistent outer memory, or repeated
+rounding. The central empirical quantity is not the absolute accuracy of a new
+selector, but its paired gain over the corresponding one-shot direction under
+the same real-training budget.

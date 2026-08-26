@@ -1,0 +1,132 @@
+\section{A Value-Function View of RHO-LOSS}
+\label{sec:connection}
+
+\subsection{The F2SA value-function direction}
+
+Define the lower-level value function
+\begin{equation}
+g^\star(\vomega):=\min_{\vtheta}g(\vomega,\vtheta)
+=g(\vomega,\thetahat(\vomega)),
+\qquad
+\thetahat(\vomega)\in\argmin_{\vtheta}g(\vomega,\vtheta).
+\end{equation}
+The bilevel feasibility condition is
+$g(\vomega,\vtheta)-g^\star(\vomega)\leq 0$. We therefore consider the
+penalized value-function objective from the original formulation,
+\begin{equation}
+\mathcal{L}^{\alpha}(\vomega,\vtheta,\vtheta')
+=f(\vtheta)+\alpha\bigl(g(\vomega,\vtheta)
+-g(\vomega,\vtheta')\bigr),
+\qquad \alpha>0,
+\label{eq:f2sa-penalty}
+\end{equation}
+and track two solutions,
+\begin{align}
+\thetatilde(\vomega)
+&\in\argmin_{\vtheta}
+    \left[f(\vtheta)+\alpha g(\vomega,\vtheta)\right],
+\label{eq:tilde-solution}\\
+\thetahat(\vomega)
+&\in\argmin_{\vtheta}g(\vomega,\vtheta).
+\label{eq:hat-solution}
+\end{align}
+Under the regularity conditions needed for the envelope theorem, the gradient
+of the minimized penalty is
+\begin{equation}
+\nabla_{\vomega}\mathcal{L}^{\alpha,\star}(\vomega)
+=\alpha\left[
+\nabla_{\vomega}g(\vomega,\thetatilde)
+-\nabla_{\vomega}g(\vomega,\thetahat)
+\right].
+\label{eq:f2sa-gradient}
+\end{equation}
+For the linear weighting in Eq.~\eqref{eq:fg}, its $i$th coordinate is
+\begin{equation}
+\left[\nabla_{\vomega}\mathcal{L}^{\alpha,\star}(\vomega)\right]_i
+=\frac{\alpha}{n}\left[
+\ell(\thetatilde;z_i)-
+\ell(\thetahat;z_i)
+\right].
+\label{eq:loss-difference-gradient}
+\end{equation}
+Consequently, the loss difference
+\begin{equation}
+s_i^{\mathrm{VF}}(\vomega)
+:=\ell(\thetahat(\vomega);z_i)
+-\ell(\thetatilde(\vomega);z_i)
+\label{eq:vf-score}
+\end{equation}
+is proportional to the \emph{negative} penalized outer gradient. A selector
+that keeps examples with large $s_i^{\mathrm{VF}}$ therefore follows a descent
+direction, subject to inner-solution and finite-$\alpha$ errors. The same
+$\alpha$ must appear in both the penalized inner objective and the outer
+gradient. A fixed value is a finite-penalty approximation; a scheduled value
+must be coordinated with the inner and outer step sizes. Score
+standardization removes only the global scale of Eq.~\eqref{eq:f2sa-gradient},
+not the dependence of $\thetatilde$ on $\alpha$.
+
+\subsection{Ideal and practical RHO-LOSS}
+
+RHO-LOSS begins with online batch selection. At training step $t$, a large
+candidate batch $C_t$ is sampled, a score is computed for every example in
+$C_t$, and only the top $b$ examples are used for one target-model update. Its
+Bayesian derivation targets the example that would most reduce predictive
+holdout loss. After replacing Bayesian posteriors with trained point-estimate
+models, the idealized score can be written in our notation as
+\begin{equation}
+\rhoideal_i(\vomega)
+=\ell(\thetahat(\vomega);z_i)
+-\ell(\thetatilde(\vomega);z_i),
+\label{eq:ideal-rho}
+\end{equation}
+where the second model incorporates both the holdout objective and the data
+represented by $\vomega$. Comparing Eqs.~\eqref{eq:vf-score} and
+\eqref{eq:ideal-rho} gives
+\begin{equation}
+\rhoideal(\vomega)
+=s^{\mathrm{VF}}(\vomega)
+=-\frac{n}{\alpha}
+\nabla_{\vomega}\mathcal{L}^{\alpha,\star}(\vomega).
+\label{eq:rho-vf-equivalence}
+\end{equation}
+This is an equality of directions at a fixed $\vomega$ under exact inner
+solutions and aligned objective normalizations. It does not say that one
+Top-$b$ RHO step solves Eq.~\eqref{eq:bilevel-selection}.
+
+Practical RHO-LOSS makes an additional approximation. It trains an
+irreducible-loss model once on $\Dval$,
+\begin{equation}
+\thetaIL\in\argmin_{\vtheta}f(\vtheta),
+\end{equation}
+freezes it, and uses
+\begin{equation}
+\rhopractical_i(t)
+=\ell(\vtheta_t;z_i)-\ell(\thetaIL;z_i),
+\label{eq:practical-rho}
+\end{equation}
+where $\vtheta_t$ is the current, generally nonconverged target model. This
+removes the need to update the joint comparator as selected data change. It
+also means Eq.~\eqref{eq:practical-rho} is not, in general, the exact gradient
+in Eq.~\eqref{eq:rho-vf-equivalence}. The RHO-LOSS paper finds this frozen
+approximation computationally useful and sometimes empirically preferable;
+our framework treats that as a testable approximation rather than an
+identity.
+
+\subsection{The approximation ladder}
+
+The shared formulation yields the following ladder:
+\begin{equation}
+\underbrace{\nabla h(\vomega)}_{\text{bilevel target}}
+\;\longleftarrow\;
+\underbrace{\nabla\mathcal{L}^{\alpha,\star}(\vomega)}_{\text{finite-penalty VF}}
+\;\longleftrightarrow\;
+\underbrace{-\rhoideal(\vomega)}_{\text{two exact inner models}}
+\;\longrightarrow\;
+\underbrace{-\rhopractical(t)}_{\text{frozen IL proxy}}.
+\label{eq:approximation-ladder}
+\end{equation}
+The left arrow carries finite-penalty bias and relies on F2SA's regularity and
+tracking conditions. The middle equivalence follows algebraically from
+linear example weights. The right arrow introduces the frozen comparator and
+target-trajectory approximations. Batch-local ranking and Top-$B$
+discretization are further approximations applied after the score is formed.

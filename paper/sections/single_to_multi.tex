@@ -1,0 +1,57 @@
+\section{From a Local Attribution Direction to Multi-Round Selection}
+\label{sec:single-to-multi}
+
+Equation~\eqref{eq:rho-vf-equivalence} is a local statement: at a fixed
+$\vomega$, a two-model loss difference supplies a descent direction for a
+finite-penalty surrogate. Data selection is instead a constrained, path-
+dependent decision problem. It must specify an initial state, how long the
+real target is trained before the selector changes, whether inner solutions
+track the new state, and how a continuous state becomes a discrete subset.
+
+\paragraph{A common warm start.}
+All comparisons begin with the same target initialization and the same random
+budget-$B$ subset $S_0$. The target trains on $S_0$ for $E_0$ epochs before any
+method-dependent selection. This avoids choosing an arbitrary Top-$B$ set from
+tied uniform weights and makes the first comparison occur at an identical,
+nontrivial target state.
+
+\paragraph{Single round.}
+At the end of the common warm start, a one-shot method constructs one score at
+$\vomega^{\mathrm{unif}}$, takes one feasible update, selects
+$S_1=\operatorname{TopB}(\vomega_1)$, and keeps $S_1$ fixed for the remaining
+target-training budget. Practical RHO-1 uses the frozen IL score in
+Eq.~\eqref{eq:practical-rho}; VF-1 uses the verified two-inner direction in
+Eq.~\eqref{eq:vf-score}.
+
+\paragraph{Multiple rounds.}
+A multi-round method retains the continuous state $\vomega_r$. After every
+$\tau$ real target epochs it (i) advances the two inner solutions until the
+preregistered tracking criterion is met, (ii) evaluates a fresh direction at
+$\vomega_r$, (iii) updates and projects the continuous state, and (iv) trains
+the target on $S_{r+1}=\operatorname{TopB}(\vomega_{r+1})$ during the next
+block. Thus, an additional round changes the real training trajectory; it is
+not a discarded virtual solve and not repeated accumulation of a stale score.
+
+\paragraph{Where can a multi-round gain come from?}
+Relative to one-shot selection, four state changes can matter:
+\begin{enumerate}
+    \item the target model changes, so the value of an example is conditional
+    on a new learner state;
+    \item the two inner models track new finite-penalty solutions;
+    \item the continuous outer state remembers previous directions; and
+    \item Top-$B$ is applied again, changing the deployed discrete subset.
+\end{enumerate}
+We isolate these components with frozen-target, frozen-inner, reset-weight, and
+delayed-rounding controls. This decomposition is the paper's main mechanism
+test: a claim that ``more rounds help'' is incomplete unless the responsible
+state transition is identified.
+
+\paragraph{RHO as an approximation endpoint.}
+Practical RHO removes two costly pieces of the multi-round VF procedure: it
+uses the current nonconverged target instead of $\thetahat(\vomega)$ and a
+frozen holdout-only IL model instead of
+$\thetatilde(\vomega)$. It then scores only a random large batch and
+immediately trains on its top fraction. We therefore compare RHO neither as an
+unrelated baseline nor as an exact VF implementation, but as the efficient end
+of a nested approximation path whose individual steps can be switched on and
+off.

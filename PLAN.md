@@ -1,775 +1,555 @@
-# ICLR 实验计划：RHO/VF-1 与 Iterative VF-R
+# Data Attribution V2：论文论断与实验执行计划
 
-## 0. 论文要验证的核心论点
+更新日期：2026-08-26。本文件取代 `plan_0820.md`，是下一阶段唯一的实验规划依据。
 
-我们的理论观点是：多种经典 data attribution 方法，可以理解为在均匀样本权重
+## 1. 中心论断与证据链
 
-\[
-\omega_0=\mathbf 1
-\]
+论文的中心问题不是“VF 是否击败所有 baseline”，而是：
 
-处，使用不同的 bilevel hypergradient estimator，估计同一个局部 selection quantity。
-传统的 attribution-then-selection 只利用了真实 selection objective 在
-\(\omega_0\) 附近的一阶局部代理。
+> data attribution 给出一个固定状态下的局部方向；data selection 需要沿真实训练轨迹，
+> 在固定预算约束内多次更新这个方向。多轮相对单轮的收益是否存在、来自哪个状态组件，
+> 以及 practical RHO 的近似为何有效？
 
-其误差可以拆成两个来源：
+证据必须按顺序成立：
 
-1. **Hypergradient approximation error**：采用 IF、GU、VF 等不同方法近似
-   bilevel hypergradient 时产生的误差。
-2. **Non-local linearization error**：即使 \(\omega_0\) 处的方向估计准确，一次
-   attribution 后直接选择较大的 subset，仍然可能离开该局部线性近似的有效区域。
+1. **局部正确性**：在相同目标、权重和 inner solutions 下，ideal RHO loss difference
+   与 finite-penalty VF/F2SA 下降方向一致。
+2. **单轮基准**：一次从 budget-feasible uniform point 出发的 VF/RHO 更新，定义为
+   one-shot attribution-then-selection。
+3. **多轮收益**：persistent VF-M 在相同 target 数据量和 optimizer steps 下优于 VF-1。
+4. **机制拆解**：收益可被分解为 target adaptation、inner tracking、outer memory 和
+   repeated Top-B rounding。
+5. **近似前沿**：practical RHO 的 frozen IL、nonconverged target 和 batch-local scoring
+   如何改变 fidelity、accuracy 与 compute。
 
-本文实验集中验证第二点：在同一条 VF/RHO estimator 线上，相比只在均匀权重附近
-进行一次全局选择，持续更新样本权重是否能够选出更好的固定训练子集。
+如果第1步不成立，后续 VF 只能作为 heuristic 报告；如果第3步不成立，论文不能声称
+multi-round optimization 有收益，但仍可报告 RHO/VF 对应关系和近似前沿。
 
-因此，headline comparison 是：
+## 2. 统一问题与状态
 
-\[
-\boxed{\text{RHO/VF-1 vs. Iterative VF-R}}
-\]
-
-IF 和 GU 不进入第一阶段主实验。这样可以避免 inverse Hessian、截断迭代和
-Adam 分母等额外数值问题干扰对 non-local linearization error 的验证。
-
----
-
-## 1. 统一符号和方法命名
-
-全文统一使用以下符号：
-
-- \(n\)：candidate training set 中的数据总量；
-- \(k\)：最终通过 global top-\(k\) 保留的数据量；
-- \(q=k/n\)：最终 subset retention ratio；
-- \(R\)：外层 sample-weight update rounds；
-- \(r\in\{0,\ldots,R-1\}\)：外层更新轮次下标；
-- \(T\)：两套 selector models 的总训练 epochs；
-- \(S_r\)：第 \(r\) 个外层区间内两套模型的 SGD steps；
-- \(B\)：Original RHO 的 candidate batch size；
-- \(b\)：Original RHO 从每个 candidate batch 中选择的数据量；
-- \(\omega_r\in\mathbb R^n\)：第 \(r\) 轮的全局样本权重；
-- \(\hat\theta_r\)：weighted training model；
-- \(\tilde\theta_r\)：包含 upper-validation objective 的辅助模型；
-- \(\operatorname{TopK}_k(s)\)：根据全局 score vector \(s\) 选择 \(k\) 条数据。
-
-方法命名固定为：
-
-- `RHO/VF-1`：保持 \(\omega=\mathbf 1\)，只进行一次全局 attribution 和
-  global top-\(k\)；
-- `Iterative VF-R`：维护全局 \(\omega_r\)，进行 \(R\) 轮 weight update，最后
-  global top-\(k\)；
-- `Original RHO`：online training method，每个大小为 \(B\) 的 candidate batch
-  内选择 top-\(b\)；
-- `Uniform`：从整个 candidate set 中均匀选择固定的 \(k\) 条数据；
-- `Uniform-online`：从每个 candidate batch 中随机选择 \(b\) 条用于当前更新。
-
-不再使用 `VF-K` 表示迭代次数。`top-k` 中的 \(k\) 永远只表示最终选择的数据量，
-\(R\) 永远只表示外层权重更新轮数。
-
----
-
-## 2. 两套 selector models 的含义
-
-### 2.1 Weighted training model：\(\hat\theta\)
-
-\(\hat\theta\) 近似求解当前样本权重下的 weighted empirical-risk problem：
-
-\[
-\hat\theta(\omega)
-\approx
-\arg\min_\theta
-\frac{1}{n}\sum_{i=1}^{n}\omega_i\ell_i(\theta).
-\]
-
-### 2.2 Auxiliary model：\(\tilde\theta\)
-
-\(\tilde\theta\) 对应带 upper-validation objective 的辅助优化问题：
-
-\[
-\tilde\theta(\omega)
-\approx
-\arg\min_\theta
-\left[
-L_{\mathrm{val}}(\theta)
-+
-\alpha
-\frac{1}{n}\sum_{i=1}^{n}\omega_i\ell_i(\theta)
-\right].
-\]
-
-两套模型必须满足：
-
-- 使用相同 architecture；
-- 使用相同 initial parameters；
-- 分别维护独立 optimizer 和 learning-rate scheduler；
-- 训练中不共享参数或 optimizer state。
-
-初始化形式为：
-
-```python
-theta_hat = make_model()
-theta_tilde = deepcopy(theta_hat)
-optimizer_hat = make_optimizer(theta_hat)
-optimizer_tilde = make_optimizer(theta_tilde)
-```
-
-这样 reducible-loss difference
-
-\[
-s_i
-=
-\ell_i(\hat\theta)-\ell_i(\tilde\theta)
-\]
-
-主要反映当前 VF/RHO selection quantity，而不会混入两套模型的容量差异。
-
----
-
-## 3. 核心比较的精确定义
-
-### 3.1 RHO/VF-1：一次全局选择
-
-RHO/VF-1 不是只训练一步模型。这里的 “1” 表示只进行一次外层 sample-selection
-update。
-
-具体过程是：
-
-1. 初始化
-
-   \[
-   \omega_0=\mathbf 1.
-   \]
-
-2. 在固定的 \(\omega_0\) 下，正常训练 \(\hat\theta\) 和 \(\tilde\theta\)，总预算为
-   \(T\) 个 epochs。
-3. 训练结束后，对整个 candidate set 计算一次全局 score：
-
-   \[
-   s_i^{\mathrm{one}}
-   =
-   \ell_i(\hat\theta_T)-\ell_i(\tilde\theta_T).
-   \]
-
-4. 选择固定 subset：
-
-   \[
-   \mathcal S_k^{\mathrm{one}}
-   =
-   \operatorname{TopK}_k
-   \left(s^{\mathrm{one}}\right).
-   \]
-
-因此，这个方法对应“在均匀权重处得到一个局部 attribution direction，然后直接走到
-最终 top-\(k\) subset”的传统 attribution-then-selection 过程。
-
-### 3.2 Iterative VF-R：多轮全局权重更新
-
-Iterative VF-R 使用完全相同的总模型训练预算 \(T\)，但将该预算划分为 \(R\) 个
-外层区间：
-
-\[
-\sum_{r=0}^{R-1}S_r=S_{\mathrm{total}}.
-\]
-
-每个 round 的过程是：
-
-1. 使用当前 \(\omega_r\)，继续训练 \(\hat\theta_r\) 和 \(\tilde\theta_r\)；
-2. 在整个 candidate set 上计算：
-
-   \[
-   s_i^{(r)}
-   =
-   \ell_i(\hat\theta_r)-\ell_i(\tilde\theta_r);
-   \]
-
-3. 对 score 做全局中心化和 RMS normalization：
-
-   \[
-   \bar s^{(r)}
-   =
-   \frac{s^{(r)}-\operatorname{mean}(s^{(r)})}
-   {\sqrt{\operatorname{mean}[(s^{(r)}-\operatorname{mean}(s^{(r)}))^2]}+\epsilon};
-   \]
-
-4. 更新全局样本权重并投影：
-
-   \[
-   \omega_{r+1}
-   =
-   \Pi_{\Omega}
-   \left[
-   \omega_r+\eta_\omega\bar s^{(r)}
-   \right],
-   \]
-
-   其中
-
-   \[
-   \Omega
-   =
-   \left\{
-   \omega\in\mathbb R_+^n:
-   \sum_{i=1}^{n}\omega_i=n
-   \right\}.
-   \]
-
-完成 \(R\) 轮后：
-
-\[
-\boxed{
-\mathcal S_k^{\mathrm{iter}}
-=
-\operatorname{TopK}_k(\omega_R)
-}
-\]
-
-这里 \(\alpha_r\) 控制 \(\tilde\theta_r\) 的辅助优化问题，\(\eta_\omega\) 控制外层
-样本权重更新。实现中不再额外用 \(\alpha_r\) 乘 normalized score，避免同时改变
-auxiliary problem 和 outer step size。
-
-### 3.3 Compute matching
-
-两种固定-subset 方法必须保持以下条件一致：
-
-- 相同模型初始化；
-- 相同 optimizer 和 scheduler；
-- 相同总 selector epochs \(T\)；
-- 相同 global training batch size；
-- 相同数据增强；
-- 相同 \(\alpha\) schedule；
-- 相同最终 \(k\)；
-- 相同 evaluator protocol。
-
-Iterative VF-R 会额外进行中间全局 scoring passes，因此严格的 wall-clock cost 不完全
-相同。论文同时报告 selector GPU-hours；“compute matched”主要指两套模型的 SGD
-training budget 相同，而不是隐藏额外 scoring cost。
-
----
-
-## 4. Original RHO 与固定-subset 方法的区别
-
-Original RHO 是 online selection-and-training：
-
-\[
-\mathcal S_{e,j}
-=
-\operatorname{TopK}_b
-\left\{
-s_i^{(e,j)}:i\in B_{e,j}
-\right\},
-\]
-
-其中 \(B_{e,j}\) 是 epoch \(e\) 中第 \(j\) 个 candidate batch。
-
-默认配置为：
-
-\[
-B=320,
-\qquad
-b=32.
-\]
-
-被选出的 \(b\) 条数据只用于当前 target-model update。下一个 candidate batch 会重新
-评分、重新选择；Original RHO 不会先从整个数据集选出一个固定 subset，再使用该
-subset 训练所有 epochs。
-
-因此：
-
-- `Original RHO` 不是 `RHO/VF-1`；
-- `Original RHO` 也不是 `Iterative VF-R` 的 \(R=1\) 特例；
-- Original RHO 报告 online training 的最终 test accuracy；
-- RHO/VF-1 和 Iterative VF-R 报告固定 subset 上独立 evaluator 的 test accuracy。
-
-Original RHO reproduction 默认让 scoring 和 target update 使用同一个 augmented
-candidate view，并保留 train-mode scoring。由于 train-mode BatchNorm 会观察完整的
-candidate batch，另外保留以下实现控制：
-
-- `rho.selection_mode=eval`；
-- `rho.score_view=deterministic`。
-
-这些设置用于检查官方式实现细节是否影响结果，但不混入固定-subset headline
-comparison。
-
----
-
-## 5. 数据集、划分与噪声设置
-
-第一阶段所有数据集均包含两个条件：
-
-1. `clean`：noise rate \(\rho=0\)；
-2. `noisy`：10% symmetric label noise，即 \(\rho=0.1\)。
-
-噪声只施加在 candidate training split。Upper validation、selector development 和
-test labels 始终保持 clean。每个被污染样本的新标签保证与原标签不同。
-
-所有 split indices、clean labels、corrupted labels 和 corruption mask 都必须保存，
-并在相同 dataset/seed 下由所有方法复用。
-
-### 5.1 数据划分
-
-| Dataset | Candidate train \(n\) | Upper validation | Selector dev | Final test |
-|---|---:|---:|---:|---:|
-| MNIST | 50,000 | 5,000 | 5,000 | official 10,000 |
-| CIFAR-10 | 40,000 | 5,000 | 5,000 | official 10,000 |
-| CIFAR-100 | 40,000 | 5,000 | 5,000 | official 10,000 |
-
-采用 40k/5k/5k 而不是使用 test set 选择 reference checkpoint，是为了避免
-Original RHO 类实现中潜在的 test leakage。
-
-### 5.2 Retention ratios
-
-| Dataset | 主实验 \(q=k/n\) | 对应 \(k\) |
-|---|---|---|
-| MNIST | \(\{0.1,0.2,0.5\}\) | \(\{5k,10k,25k\}\) |
-| CIFAR-10 | \(\{0.1,0.2,0.5\}\) | \(\{4k,8k,20k\}\) |
-| CIFAR-100 | \(\{0.2,0.5\}\) | \(\{8k,20k\}\) |
-
-CIFAR-100 的 10% retention 作为可选 stress test，不列入第一轮必跑矩阵。
-
-### 5.3 三个数据集在论文中的角色
-
-#### MNIST：sanity check / appendix
-
-- 快速验证更新方向、projection 和 index bookkeeping；
-- 检查 noisy-label filtering 是否符合预期；
-- 调试 \(\alpha\) 与 \(\eta_\omega\)；
-- 不作为 ICLR 主结论的唯一证据。
-
-#### CIFAR-10：主要开发与消融数据集
-
-- 固定-subset 主结果；
-- \(R\)、\(\alpha\)、\(\eta_\omega\) 和 selector budget 消融；
-- weight、ranking 和 noise-removal trajectory；
-- 第一轮所有实现决策在此确定。
-
-#### CIFAR-100：困难场景验证
-
-- 验证结论不只存在于简单数据集；
-- 使用 CIFAR-10 上确定的最终配置；
-- 不重复所有消融，避免无意义地扩大算力消耗。
-
----
-
-## 6. 模型与训练配置
-
-### 6.1 MNIST
-
-Selector 和 evaluator 均使用两层 MLP：
+候选数据为 `D_tr={z_i}_{i=1}^n`，clean holdout 为 `D_val`：
 
 ```text
-784 → 300 → 10
-activation: Sigmoid
+g(omega, theta) = (1/n) sum_i omega_i ell(theta; z_i)
+f(theta)        = (1/|D_val|) sum_{z in D_val} ell(theta; z)
 ```
 
-默认 selector 设置：
+固定预算集合：
 
-- optimizer：SGD；
-- learning rate：0.01；
-- global batch size：500；
-- selector epochs：50；
-- weight decay：0.01。
+```text
+W_B = {omega in [0,1]^n : sum_i omega_i = B}
+```
 
-### 6.2 CIFAR-10/100
+必须区分：
 
-统一使用 CIFAR-style ResNet-18：
+- `omega_r`：persistent continuous outer state；
+- `score_r`：当前状态下的 negative outer-gradient estimate；
+- `S_r=Top-B(omega_r)`：下一个真实 target block 使用的离散子集；
+- `theta_target`：真实训练并最终评估的模型；
+- `theta_hat`、`theta_tilde`：只服务于 VF estimator 的两条 inner branches。
 
-- 第一层为 \(3\times3\) convolution；
-- stride 1；
-- 不使用 ImageNet-style \(7\times7\) stem；
-- 不使用初始 max-pooling；
-- CIFAR-10 classifier 输出 10 类；
-- CIFAR-100 classifier 输出 100 类。
+预算实验的 uniform/reset point 固定为：
 
-默认 selector 设置：
+```text
+omega_unif = (B/n) * 1
+```
 
-| Setting | CIFAR-10 | CIFAR-100 |
-|---|---:|---:|
-| Selector epochs \(T\) | 100 | 120 |
-| Global batch size | 128 | 128 |
-| Optimizer | SGD | SGD |
-| Learning rate | 0.1 | 0.1 |
-| Momentum | 0.9 | 0.9 |
-| Weight decay | \(5\times10^{-4}\) | \(5\times10^{-4}\) |
-| Scheduler | 5-epoch warmup + cosine | 5-epoch warmup + cosine |
+全1向量只保留为“所有数据完整存在”的 attribution reference；它不用于10%预算下的
+reset/persistent 比较。
 
-### 6.3 最终 evaluator
+## 3. 新版 VF/F2SA 规范
 
-最终 evaluation model 必须：
+### 3.1 两个 inner problems
 
-- 从头随机初始化；
-- 只使用保存的 selected indices；
-- 不加载 \(\hat\theta_R\) 或 \(\tilde\theta_R\)；
-- 所有 selection 方法使用相同 architecture；
-- 使用相同 training epochs、augmentation、optimizer 和 scheduler；
-- 使用 selector dev split 选择 checkpoint；
-- official test 只用于最终一次报告。
+在 outer round `r`：
 
-主结果仍使用相同结构：
+```text
+theta_hat(omega_r)          = argmin_theta g(omega_r, theta)
+theta_tilde(omega_r)        = argmin_theta f(theta) + alpha_r g(omega_r, theta)
+```
 
-\[
-\text{MLP on MNIST},
-\qquad
-\text{ResNet-18 on CIFAR}.
-\]
+VF score：
 
-可选的 architecture-transfer 实验为：
+```text
+score_i = ell(theta_hat; z_i) - ell(theta_tilde; z_i)
+```
 
-- ResNet-18 负责 selection；
-- WideResNet-28-10 或 ResNet-34 从头训练并负责 evaluation。
+由于
 
-该实验用于判断所选数据是否具有跨模型价值，属于加分项，不是第一轮必须完成。
+```text
+[grad_omega L^{alpha,*}(omega)]_i
+  = (alpha_r/n) [ell(theta_tilde;z_i)-ell(theta_hat;z_i)]
+```
 
----
+代码用 `omega <- omega + eta * standardized(score)`，再投影回 `W_B`。
 
-## 7. \(\alpha\) 与 \(\omega\) 的更新配置
+### 3.2 沿用原稿的 alpha；外部符号只作内部校验
 
-### 7.1 MNIST 的 \(\alpha\)
+论文与本 plan 始终使用原稿的 `alpha`：
 
-前 50% selector epochs 线性增加：
+```text
+alpha_r = alpha_0 * (1+r)^p
+```
 
-\[
-\alpha:0.01\longrightarrow0.1,
-\]
+实现配置使用语义中性的 `f2sa.penalty`，其数值就是文稿中的 `alpha_r`。不要把
+外部论文的变量名写进正文。为防止公式或代码错位，内部维护如下映射：
 
-后 50% 保持 0.1。
+| 本文 | F2SA 原文 | 在本文中的角色 |
+|---|---|---|
+| `omega_r` | outer variable `x_k` | continuous example weights |
+| `theta_tilde` | penalized-inner tracker `y_k` | minimize `f + alpha_r g` |
+| `theta_hat` | lower-level tracker `z_k` | minimize `g` |
+| `alpha_r` | penalty sequence `lambda_k` | value-function penalty multiplier |
 
-### 7.2 CIFAR 的 \(\alpha\)
+RHO-LOSS 的概念映射同样只留在 plan：ideal RHO 的 training-only model 对应
+`theta_hat`，joint holdout-plus-weighted-training model 对应 `theta_tilde`；practical RHO
+则用当前 `theta_target` 和冻结的 `theta_IL` 替代这两条收敛分支。
 
-在初始模型上校准：
+preflight 比较：
 
-\[
-c_\alpha
-=
-\frac{\|\nabla_\theta L_{\mathrm{val}}\|}
-{\|\nabla_\theta L_{\mathrm{train}}\|+\epsilon}.
-\]
+- `alpha_0 in {1, 10}`；
+- `p in {0, 0.25}`；
+- `p=0` 明确标为 fixed finite-penalty approximation；
+- 主实验只保留一个 validation-selected schedule。
 
-前 50% selector epochs 线性增加：
+不能因为 score standardization 消除了全局尺度，就忽略 alpha 对 `theta_tilde` 解的影响。
 
-\[
-\alpha:0.1c_\alpha\longrightarrow3c_\alpha,
-\]
+### 3.3 inner tracking 与停止
 
-后 50% 保持 \(3c_\alpha\)。DDP 实现中先对各卡 gradient 做平均，再计算 global
-gradient norm，保证 \(c_\alpha\) 不随 GPU 数量发生系统性变化。
+两条 inner branches 在第一次 round 从相同模型初始化和相同 BN buffers 出发，此后分别
+persistent warm start。inner optimization：
 
-### 7.3 外层权重更新
+- BN running mean/variance 固定；BN affine parameters 正常学习；
+- `theta_hat` 最小化 fixed-denominator weighted candidate risk；
+- `theta_tilde` 最小化 clean holdout risk + `alpha_r` 倍 weighted candidate risk；
+- candidate 与 holdout 的样本数、optimizer steps 分别记录。
 
-主配置为：
+preflight 比较 inner passes `{1,5,10,20,50}`。停止规则只用 validation/inner 信息：
 
-\[
-R=10,
-\qquad
-\eta_\omega=0.1,
-\qquad
-\omega_0=\mathbf1.
-\]
+- 两个 objective 的相对改善均小于 `1e-3`，连续3次检查；
+- 相邻全局 score cosine `>0.99`；
+- 相邻 Top-B Jaccard `>0.95`；
+- 最多50个 candidate passes。
 
-每轮更新后投影到 non-negative simplex，保持：
+主实验使用 preflight 选出的最小稳定 passes 或停止规则。不得用 test accuracy 决定。
 
-\[
-\omega_i\ge0,
-\qquad
-\sum_i\omega_i=n.
-\]
+### 3.4 omega 参数化
 
----
+主方案：direct continuous omega + capped-simplex projection。
 
-## 8. 主实验矩阵
+消融：unconstrained logits `a`，通过
 
-### 8.1 Fixed-subset headline table
+```text
+omega_i = sigmoid(a_i + c(a)),  sum_i omega_i = B
+```
 
-每个数据集、noise condition 和 retention ratio 比较：
+求一维 shift `c(a)` 保证预算。logit 更新必须使用 budget-calibrated sigmoid 的链式梯度；
+direct 与 logit learning rate 分开调节。
 
-1. `Full-data`；
-2. `Uniform` global top-\(k\)；
-3. `RHO/VF-1`；
-4. `Iterative VF-R`，主配置 \(R=10\)。
+## 4. 单轮与多轮的精确定义
 
-核心论文比较是：
+### 4.1 共享 warm start
 
-\[
-\operatorname{Acc}
-\left(\mathcal S_k^{\mathrm{iter}}\right)
-\quad\text{vs.}\quad
-\operatorname{Acc}
-\left(\mathcal S_k^{\mathrm{one}}\right).
-\]
+所有方法共享：
 
-所有 headline results 使用 5 seeds。
+- target initialization；
+- 随机预算子集 `S0`；
+- 在 `S0` 上的前 `E0` 个 target epochs；
+- optimizer、scheduler、数据顺序和 checkpoint rule。
 
-### 8.2 Online RHO table
+`E0` 只通过 uniform-fixed 的 development curve 选择：在候选 `{5,10,20}` 中取首次达到
+预注册 plateau criterion 的值；每个数据集选定后冻结。保存 `S0`，所有 paired methods
+直接读取同一文件。
 
-单独报告：
+### 4.2 One-shot
 
-1. `Uniform-online`：每个 \(B=320\) candidate batch 随机选择 \(b=32\)；
-2. `Original RHO`：每个 \(B=320\) candidate batch 按 reducible loss 选择 top-32。
+warm start 后：
 
-Online table 是相关 baseline，不与固定-subset evaluator 的训练过程混为一谈。
+1. 在 `omega_unif` 计算一次 score；
+2. 更新一次 omega 并取 `S1=Top-B(omega_1)`；
+3. 剩余 target epochs 始终训练 `S1`；
+4. 不再更新 score、inner models 或 omega。
 
-### 8.3 首轮最小论文配置
+得到 `RHO-1` 和 `VF-1`。
 
-| Dataset | Conditions | Retention | Seeds | 主要用途 |
-|---|---|---|---:|---|
-| MNIST | clean、10% noise | 10/20/50% | 3–5 | sanity check |
-| CIFAR-10 | clean、10% noise | 10/20/50% | 5 | 主结果、完整分析 |
-| CIFAR-100 | clean、10% noise | 20/50% | 5 | 困难场景验证 |
+### 4.3 Multi-round
 
-第一轮 selector 主矩阵共有：
+warm start 后，每 `tau` 个真实 target epochs：
 
-\[
-(3+3+2)\times2\text{ noise conditions}
-\times2\text{ methods}\times5\text{ seeds}
-=160
-\]
+1. 将 inner models 跟踪到当前 `omega_r` 的稳定解；
+2. 重新计算 score；
+3. 更新 persistent `omega_r -> omega_{r+1}`；
+4. 取 `S_{r+1}=Top-B(omega_{r+1})`；
+5. 用该子集真实训练下一个 target block。
 
-个 `RHO/VF-1` / `Iterative VF-R` selector jobs，随后分别训练 evaluator。
+候选 update interval：
 
----
+```text
+tau in {1, 5, 10, 20, infinity}
+```
 
-## 9. 必须报告的结果与诊断量
+`tau=infinity` 即 one-shot。先在 MNIST 10% noise、seed 1 筛选，再把最有代表性的两个
+finite intervals 带入完整 paired-seed 实验。interval 改变 selector 更新次数，因此同时报告
+accuracy-vs-data 和 accuracy-vs-compute。
 
-### 9.1 最终性能
+## 5. RHO 协议
 
-- test accuracy；
-- upper-validation loss；
+### 5.1 Faithful practical RHO
+
+- IL model 只在 clean holdout 上训练；按 development/holdout loss 选择 checkpoint；
+- IL model 在 target training 前冻结，irreducible losses 可缓存；
+- 每步随机读取 large batch `n_B=320`；
+- 用当前 target loss - frozen IL loss 打分；
+- 选择 top `n_b=32`，立即更新 target；
+- selection 使用 large-batch BN statistics，target update 使用 selected-batch BN statistics；
+- 两次 scoring 都不提交 selection 阶段产生的 BN running-buffer 改变。
+
+这个方法命名为 `rho_batch_faithful`。
+
+### 5.2 RHO extensions
+
+- `rho_global_one_shot`：全 candidate 打分一次；
+- `rho_global_multi`：按 tau 全局重新打分；
+- `rho_joint_comparator`：更新 joint holdout+candidate comparator，即 ideal-RHO 近似；
+- `rho_frozen_il`：practical frozen comparator。
+
+global RHO 是本文扩展，不标为原论文算法。
+
+### 5.3 RHO batch-size 支线
+
+固定 retention=10%，比较 matched pairs：
+
+```text
+(n_B, n_b) in {(160,16), (320,32), (640,64), (1280,128)}
+```
+
+这样只改变 batch scale，不改变选择比例。先在 MNIST/CIFAR-10 10% noise、seed 1 筛选，
+再对前两名做3 seeds。预算比例 sweep 是另一实验，不能与 batch-size sweep 混合解释。
+
+## 6. 三个 RQ 与实验
+
+### RQ1：loss difference 是否是可用的 VF/F2SA 局部方向？
+
+**RQ1a：数学正确性。** 在2--10维 strongly-convex toy problem 比较：
+
+- analytic hypergradient；
+- finite difference；
+- full autograd unroll；
+- converged finite-penalty VF loss difference。
+
+必须满足符号一致、cosine `>0.99`、relative error 在数值容差内。
+
+**RQ1b：神经网络中的近似误差。** 在相同 omega/checkpoint 比较：
+
+1. converged VF；
+2. truncated VF；
+3. ideal RHO / updating joint comparator；
+4. practical RHO / frozen IL；
+5. current nonconverged target 替代 theta_hat。
+
+主要指标：signed cosine、Spearman、Top-B Jaccard、score norm、inner residual、
+selected-noise fraction。final accuracy 只作次要后果。
+
+### RQ2：多轮是否优于单轮？
+
+核心方法矩阵：
+
+| ID | 方法 | 回答的问题 |
+|---|---|---|
+| U-fixed | warm start 后固定随机子集 | 不重新选择 |
+| U-round | 每 block 重采随机子集 | 单纯 reselection |
+| RHO-1 | practical/global RHO 一次 | practical one-shot |
+| VF-1 | verified VF 一次 | 理论 one-shot |
+| RHO-M | practical/global RHO 多轮 | cheap multi-round |
+| VF-M | persistent verified VF | full multi-round |
+
+主 estimand：
+
+```text
+Delta_multi = Accuracy(VF-M) - Accuracy(VF-1)
+```
+
+次要 estimands：RHO-M - RHO-1、VF-1 - U-fixed、VF-M - U-round。
+
+比较必须 paired by dataset split、noise realization、target initialization、S0 和 seed。
+只有 paired CI 为正且 accuracy-vs-compute 不被单轮支配时，才声称 multi-round benefit。
+
+### RQ3：多轮收益与 practical RHO 近似分别来自什么？
+
+从 verified VF-M 出发一次只改变一个组件：
+
+1. `short-inner`：减少 inner passes；
+2. `frozen-inner`：inner models 不再跟踪；
+3. `current-target-as-hat`：用 target 替代 theta_hat；
+4. `frozen-joint`：joint comparator 停止更新；
+5. `holdout-only-IL`：替换为 practical IL；
+6. `batch-local`：global scoring 改 large-batch scoring；
+7. `reset-omega`：每轮回到 omega_unif；
+8. `delayed-rounding`：更新 omega 但中途不改变 target subset；
+9. `sigmoid-omega`：projection 改 budget-calibrated logits。
+
+四个机制对照直接对应多轮状态：
+
+- frozen target -> target adaptation；
+- frozen inner -> inner tracking；
+- reset omega -> outer memory；
+- delayed Top-B -> repeated rounding。
+
+报告每一级相对上一级的 paired accuracy delta、score agreement、额外 FLOPs/wall-clock 和显存。
+
+## 7. 数据集、噪声与预算的阶段顺序
+
+固定 split（official test 始终独立）：
+
+| Dataset | Candidate | Clean holdout | Development | Test |
+|---|---:|---:|---:|---:|
+| MNIST | 50,000 | 5,000 | 5,000 | 10,000 |
+| CIFAR-10 | 40,000 | 5,000 | 5,000 | 10,000 |
+| CIFAR-100 | 25,000 | 20,000 | 5,000 | 10,000 |
+
+CIFAR-100 保留旧实验的25k candidate scale，但不再把同一25k validation 同时当
+development；20k 只进入 upper/IL objective，5k 只用于 checkpoint、early stop 和调参。
+
+不得一次生成旧式全矩阵。按以下 gate 逐步扩展：
+
+### Stage A：Correctness
+
+- toy exact-gradient tests；
+- MNIST、10% noise、seed 1；
+- alpha、inner passes、omega parameterization preflight。
+
+### Stage B：RQ1 approximation ladder
+
+- MNIST、CIFAR-10；
+- 10% noise；
+- seeds 1/2/3；
+- 不做 retention sweep。
+
+### Stage C：RQ2 interval screening
+
+- MNIST、10% noise、seed 1；
+- tau `{1,5,10,20,infinity}`；
+- 选择两个 finite intervals，不根据 test set 选择。
+
+### Stage D：RQ2 main comparison
+
+- datasets：MNIST、CIFAR-10、CIFAR-100；
+- noise：0%、10%；
+- seeds：1/2/3；
+- methods：6个核心方法，multi 方法只用筛选出的2个 intervals。
+
+### Stage E：RQ3 nested ablations
+
+- MNIST、CIFAR-10；
+- 10% noise；
+- 先 seed 1，再对改变结论的组件做3 seeds。
+
+### Stage F：robustness
+
+只有前述结论稳定后：
+
+- noise 扩展到20%、30%；
+- retention 扩展到5%、15%、20%；
+- budget sweep 仅保留 U-round、VF-1、VF-M、best practical RHO；
+- RHO batch-size 支线独立报告。
+
+## 8. 指标与统计
+
+主要结果：
+
+- final/best-development-selected test accuracy；
+- accuracy versus real target examples；
+- accuracy versus target optimizer steps；
+- accuracy versus selector compute/wall-clock。
+
+机制诊断：
+
 - selected-noise fraction；
-- selected-clean percentage；
-- selector GPU-hours；
-- evaluator GPU-hours；
-- 5 seeds 的 mean ± standard deviation；
-- Iterative VF-R 相对 RHO/VF-1 的 paired difference；
-- paired bootstrap confidence interval。
+- class coverage、entropy、min/max count；
+- continuous omega min/max/sum/ESS；
+- adjacent score cosine；
+- Top-B Jaccard、turnover、cumulative coverage；
+- two-inner objectives、gradient/stationarity proxy、passes；
+- alpha、outer step size、projection residue；
+- target/inner/scoring examples、steps、wall-clock、peak GPU memory。
 
-### 9.2 每轮 trajectory
+统计：
 
-在每个 weight-update round 保存：
+- 所有核心比较按 seed 配对；
+- 报告 mean、sample SD、paired delta 和 bootstrap/t interval；
+- 不用“2/3 seeds 赢”替代效应量；
+- test set 每个 run 只在最终 checkpoint protocol 确定后评估。
 
-- score vector \(s^{(r)}\)；
-- sample weights \(\omega_r\)；
-- 当前 top-\(k\) indices；
-- 与第一轮 top-\(k\) 的 Jaccard overlap；
-- 与第一轮 score 的 Spearman rank correlation；
-- weight effective sample size：
+## 9. 旧实验的复用规则
 
-  \[
-  \operatorname{ESS}(\omega)
-  =
-  \frac{(\sum_i\omega_i)^2}{\sum_i\omega_i^2};
-  \]
+### 可复用基础设施
 
-- selected-noise fraction；
-- observed-label class counts；
-- clean-label class counts；
-- validation loss。
+- deterministic dataset split 和 symmetric noise realization；
+- `data_indices_and_noise.npz`；
+- MNIST MLP、CIFAR ResNet-18；
+- target optimizer/evaluation、logging；
+- capped-simplex projection；
+- uniform baseline 的历史结果范围。
 
-这些 trajectory 用于回答：
+### 可复用但必须重新配对运行
 
-1. 多轮更新是否真的改变了 ranking；
-2. 改变发生在前几轮还是持续发生；
-3. ranking change 是否对应更少的 corrupted examples；
-4. 性能提升是否只是权重过度集中造成的；
-5. 在 clean data 上是否出现类别塌缩。
+- `uniform_epoch`、`uniform_batch`：用来做新 runner regression/sanity check；不能与新方法
+  直接做 paired significance，因为旧 run 没有共享新版 S0 warm start。
+- holdout-only IL model 的训练代码：协议可复用；checkpoint 只有 config/hash 完全一致时复用。
 
----
+### 仅作历史诊断
 
-## 10. 消融实验
+- `rho_batch_matched`：旧配置没有 faithful selection-batch BN，必须重跑；
+- `rho_epoch_persistent_u1` 与 `vf_epoch_persistent_u1`：保留掉点作为 motivation；
+- fairness audit：只证明旧矩阵预算/metadata 自洽，不证明 estimator 正确。
 
-除特别说明外，消融固定在：
+### 不进入新论文结论
 
-\[
-\text{CIFAR-10},
-\quad
-10\%\text{ label noise},
-\quad
-q=0.2,
-\quad
-3\text{ seeds}.
-\]
+- online-K；
+- persistence/block-K；
+-旧 strict-VF U1/UB；
+- fresh evaluator 旧结果。
 
-### 10.1 外层更新轮数
+fresh evaluator 未来只可作为次要问题：最终 selection solution 是否能迁移到新初始化/模型；
+不能用来证明 multi-round optimization 本身有效。
 
-保持总 selector epochs \(T=100\) 不变：
+## 10. Go / No-Go
 
-\[
-R\in\{1,2,5,10,20\}.
-\]
+进入完整 GPU 主实验需同时满足：
 
-这是最重要的消融，用于检查收益是否随多轮 refinement 出现，以及何时饱和。
+1. toy exact-gradient tests 通过；
+2. omega 全程满足预算约束；
+3. ideal RHO 与 converged VF 的方向一致；
+4. inner stopping 后 score 对增加 passes 不敏感；
+5. shared S0、target init 和 data order 可审计；
+6. test set 未参与任何选择；
+7. 单次 run 可从 config、seed、S0 和 checkpoints 完全复现。
 
-### 10.2 \(\alpha\) schedule
+如果 VF 仍低于 RHO，先报告 gradient agreement、inner residual、finite-alpha bias、score stability、
+projection/rounding 和 compute；全部正常后，才可把差距解释为 practical approximation 的收益。
 
-- constant；
-- linear continuation；
-- geometric continuation。
+## 11. 服务器实现 TODO
 
-### 10.3 \(\alpha_{\max}\)
+当前 `data_attribution_v2` 已包含数学与协议核心、配置、correctness tests 和旧结果摘录，
+但尚未包含可直接运行完整神经网络实验的端到端 runner。以下工作在服务器上按顺序完成；
+前一级未通过时，不启动后一级实验。
 
-\[
-\alpha_{\max}
-\in
-\{1,3,10\}c_\alpha.
-\]
+### 11.1 建立并验证运行环境
 
-### 10.4 Outer weight step size
+- 使用 Python 3.11 或更高版本建立独立环境；
+- 安装 `data_attribution_v2` 的 dev dependencies；
+- 记录 Python、PyTorch、CUDA、cuDNN、GPU、driver 和 git/code snapshot；
+- 将数据根目录、artifact 根目录和设备设置改为服务器路径，但不修改实验语义；
+- 运行：
 
-\[
-\eta_\omega
-\in
-\{0.03,0.1,0.3\}.
-\]
+```bash
+cd data_attribution_v2
+python3.11 -m pip install -e '.[dev]'
+pytest -q
+python3.11 scripts/run_toy_gate.py
+```
 
-### 10.5 Selector training budget
-
-\[
-T\in\{50,100,200\}\text{ epochs}.
-\]
-
-该消融用于排除 Iterative VF-R 的优势只是中间模型训练不足或过度训练造成的。
-
-### 10.6 第二阶段实验
-
-首轮结果稳定后再考虑：
-
-- 20% 或更高 label noise；
-- feature corruption；
-- long-tail class imbalance；
-- ResNet-18 selection 到 WideResNet-28-10 evaluation 的跨模型迁移。
-
-这些实验不应阻塞 clean + 10% noisy 的第一轮主结果。
-
----
-
-## 11. 结果如何支持理论论点
-
-仅仅观察到 Iterative VF-R 最终准确率更高，不能单独“证明”VF score 等于
-\(\omega=\mathbf1\) 处的一步近似；该对应关系由理论推导建立。
-
-实验验证的是这项推导的算法后果：
-
-1. `RHO/VF-1` 使用均匀权重附近的一次局部 score；
-2. `Iterative VF-R` 允许模型状态、score 和 \(\omega_r\) 共同演化；
-3. 若多轮方法稳定取得更优 subset，并且 ranking trajectory 显示其逐渐偏离第一轮
-   ranking，那么结果支持 non-local linearization error 在实际 selection 中确实重要；
-4. 若 \(R=1\) 与 RHO/VF-1 接近，而 \(R>1\) 后逐渐改善，这将是最直接的实验模式；
-5. 若提升同时对应更低 selected-noise fraction，说明 improvement 具有可解释的
-   data-cleaning mechanism，而不仅是 evaluator 方差。
-
-主要论证链条写成：
-
-\[
-\text{one-step local attribution}
-\longrightarrow
-\text{ranking changes across rounds}
-\longrightarrow
-\text{better fixed subset}
-\longrightarrow
-\text{better from-scratch evaluation}.
-\]
-
----
-
-## 12. 多 GPU 与集群执行方案
-
-### 12.1 单个 selector run 的 DDP
-
-- \(\hat\theta\) 和 \(\tilde\theta\) 都使用 DistributedDataParallel；
-- global batch size 在各 rank 间均分；
-- \(\omega\in\mathbb R^n\) 在每个 rank 上复制；
-- 每轮 scoring 时，各 rank 按 global candidate index 累加 score sum 和 count；
-- 使用 all-reduce 得到完整全局 score；
-- 每个 rank 执行相同 weight update 和 projection。
-
-### 12.2 大规模 sweep 的首选方式
-
-对于 ResNet-18 规模，优先采用：
-
-\[
-\boxed{\text{one independent seed/configuration per GPU}}
-\]
-
-而不是强制每个小模型占用很多 GPU。这样更容易把集群利用率拉满，也减少 DDP
-communication overhead。
-
-Original RHO 每个 run 保持单 GPU，以维持精确的 \(320\to32\) online batch
-semantics；不同 seeds/configurations 在不同 GPU 上并行。
-
-### 12.3 Checkpoint 与恢复
-
-每个 outer round 后保存：
-
-- 两套 selector model states；
-- 两个 optimizer states；
-- 两个 scheduler states；
-- AMP scaler states；
-- 当前 \(\omega_r\)；
-- 当前 score；
-- epoch 和 round counters。
-
-集群中断后从最近一个 round boundary 恢复。
-
----
-
-## 13. 分阶段执行顺序
-
-### Phase A：代码正确性与 smoke test
-
-1. MNIST clean，缩短 epochs，检查训练能否结束；
-2. MNIST 10% noise，检查保存的 corruption mask；
-3. 检查 \(\sum_i\omega_i=n\) 和 \(\omega_i\ge0\)；
-4. 检查 global top-\(k\) 数量和 indices 唯一性；
-5. 用 CIFAR-10 单 GPU 和 2-GPU DDP 比较 score/order 是否基本一致；
-6. 检查中断恢复是否能继续到下一 round。
-
-### Phase B：小规模开发
-
-1. CIFAR-10，10% noise，\(q=0.2\)；
-2. 运行 3 seeds；
-3. 比较 RHO/VF-1、\(R=2,5,10\)；
-4. 确定 \(\alpha\)、\(\eta_\omega\) 和数值稳定性；
-5. 冻结最终配置。
-
-### Phase C：完整主实验
-
-1. CIFAR-10 clean + noisy 全 retention ratios、5 seeds；
-2. CIFAR-100 clean + noisy、5 seeds；
-3. MNIST clean + noisy sanity results；
-4. Uniform、Full-data 和 online RHO baselines；
-5. 所有 fixed-subset 方法训练独立 evaluator。
-
-### Phase D：消融与附加实验
-
-1. CIFAR-10 上完成 \(R\) 消融；
-2. 完成 \(\alpha\)、\(\eta_\omega\) 和 selector budget 消融；
-3. 根据主结果决定是否增加 higher noise、feature corruption、class imbalance；
-4. 资源允许时进行 architecture transfer。
-
----
-
-## 14. 算力不足时的优先级
-
-按论文价值排序：
-
-1. CIFAR-10 + ResNet-18 主结果与 \(R\) 消融；
-2. CIFAR-100 + ResNet-18 困难场景；
-3. CIFAR-10 的 trajectory figures；
-4. MNIST sanity check；
-5. Original RHO online table；
-6. 跨模型迁移；
-7. 更多 online RHO 实现变体。
-
-最简洁的论文叙事是：
-
-\[
-\text{MNIST：算法与实现可运行},
-\]
-
-\[
-\text{CIFAR-10：完整主结果、机制分析和消融},
-\]
-
-\[
-\text{CIFAR-100：困难场景验证}.
-\]
-
-宁愿优先保证 CIFAR-10/100 的 seeds、matched budgets 和 evaluator protocol，也不要
-为了覆盖更多 online/global 组合而削弱核心比较。
+完成标准：全部单测通过，toy gate 的三组 cosine 均大于 `0.999`，finite-difference
+relative error 小于 `1e-6`。
+
+### 11.2 实现统一端到端 runner
+
+新增一个统一入口，例如 `scripts/run_experiment.py`，不得为每个方法复制一套训练代码。
+runner 必须组合现有模块，而不是重新定义其语义：
+
+- `data.py`：稳定 index、candidate/holdout/development/test split 和 label noise；
+- `models.py`、`training.py`：模型、target optimizer、scheduler 和 evaluation；
+- `protocol.py`：shared warm start、one-shot/multi-round update boundaries；
+- `omega.py`：persistent continuous state、projection/sigmoid 和 Top-B view；
+- `selector.py`、`f2sa.py`：两条 inner branches、停止规则和 VF score；
+- `rho.py`：faithful practical RHO batch scoring；
+- `io.py`：config、checkpoint、metrics 和 provenance。
+
+runner 需实现六个核心方法：
+
+```text
+uniform_fixed, uniform_round,
+rho_one_shot, vf_one_shot,
+rho_multi, vf_multi
+```
+
+所有方法必须读取同一个已保存的 `S0` 和 target initialization。one-shot 在 warm start
+后只更新一次；multi-round 只在 `ProtocolSpec.update_epochs()` 返回的边界更新。VF-M 的
+continuous `omega`、`theta_hat` 和 `theta_tilde` 均跨 round 保留，Top-B mask 不得覆盖
+continuous state。
+
+### 11.3 补齐 checkpoint、恢复和审计
+
+每次 outer update 至少保存：
+
+- resolved config、code/environment metadata 和所有 seeds；
+- candidate/holdout/development indices、noise mask 和共享 `S0`；
+- target、`theta_hat`、`theta_tilde`、optimizer/scheduler states；
+- continuous omega/logits、selected indices、raw/standardized scores；
+- 当前 epoch、outer round、inner passes 和 RNG states；
+- target/selector processed examples、optimizer steps、wall-clock 和 peak memory；
+- Section 8 规定的约束、inner stability、selection 和 accuracy metrics。
+
+恢复后的下一次 update 必须与不中断运行一致。每个 artifact 目录使用唯一 run ID，禁止
+静默覆盖已有 run；失败或中断 run 必须保留状态标记。
+
+### 11.4 实现 RQ3 组件开关
+
+在统一 runner 中加入独立、可审计的 switches：
+
+```text
+freeze_target
+freeze_inner
+current_target_as_hat
+freeze_joint_comparator
+holdout_only_il
+batch_local_scoring
+reset_omega
+delayed_rounding
+omega.parameterization={projected,sigmoid}
+```
+
+每个 RQ3 run 相对 verified VF-M 只改变一个开关。不得通过不同 runner、不同默认 batch
+size 或不同训练预算隐式改变其他组件。
+
+### 11.5 MNIST smoke test
+
+先运行 MNIST、10% noise、seed 1、10% retention：
+
+1. `uniform_fixed` 和 `uniform_round`，验证 target pipeline；
+2. `rho_one_shot`，验证 frozen IL、large-batch scoring 和 selected-batch update；
+3. `vf_one_shot`，验证两条 inner branch、score sign 和一次 omega update；
+4. `vf_multi`，只运行两个 outer updates，验证 persistent state 与 resume；
+5. 同一配置从 checkpoint 恢复一次，与不中断运行比较。
+
+smoke test 不用于论文比较。完成标准：无 test leakage；所有 omega constraint audit 通过；
+每个 candidate 在 global scoring 中恰好出现一次；inner objective、score cosine、Top-B
+Jaccard 和 processed-example counts 可复核；resume 后状态一致。
+
+### 11.6 Correctness preflight 与主实验放行
+
+smoke test 后运行 Stage A：
+
+- `alpha_0 in {1,10}`、`p in {0,0.25}`；
+- inner passes `{1,5,10,20,50}`；
+- projected 与 budget-calibrated sigmoid；
+- target batch size 与 inner batch size 分开筛选；
+- ideal RHO、converged VF、truncated VF 和 practical RHO 的方向/排名诊断。
+
+只使用 validation/development 结果冻结 `alpha_r` schedule、inner stopping、warm-start
+epochs、outer step size 和两个 update intervals。把冻结后的 resolved configs 另存为
+`configs/frozen/`，生成 manifest 后才允许执行 Stage B--F。
+
+### 11.7 服务器端最终完成清单
+
+- [ ] Python/PyTorch/CUDA 环境和代码 snapshot 已记录；
+- [ ] `pytest` 与 toy gate 全部通过；
+- [ ] 六个核心方法使用同一 runner；
+- [ ] shared S0、target init、data order 和 noise realization 可审计；
+- [ ] one-shot/multi-round 的真实训练轨迹符合 Section 4；
+- [ ] VF 的两条 inner branches、`alpha_r` 和 persistent omega 符合 Section 3；
+- [ ] faithful RHO 的 BN/Dropout/buffer 行为通过测试；
+- [ ] checkpoint resume 与不中断运行一致；
+- [ ] MNIST smoke test 通过且无 test leakage；
+- [ ] Stage A 通过 Go/No-Go，冻结配置后再生成主实验 manifest；
+- [ ] Stage B--F 严格按 gate 顺序运行，不提前展开旧式全矩阵。

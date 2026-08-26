@@ -1,0 +1,46 @@
+\section{Derivation of the Loss-Difference Direction}
+\label{app:derivation}
+
+For fixed $\vomega$, let
+\begin{equation}
+\mathcal{L}^{\alpha,\star}(\vomega)
+=\min_{\vtheta}\left\{
+f(\vtheta)+\alpha g(\vomega,\vtheta)
+\right\}
+-\alpha g^\star(\vomega).
+\end{equation}
+Applying the envelope theorem to the two minimized terms gives
+\begin{align}
+\nabla_{\vomega}\mathcal{L}^{\alpha,\star}(\vomega)
+&=\alpha\nabla_{\vomega}
+g(\vomega,\thetatilde(\vomega))
+-\alpha\nabla_{\vomega}
+g(\vomega,\thetahat(\vomega)).
+\end{align}
+Since
+$g(\vomega,\vtheta)=n^{-1}\sum_i\omega_i\ell(\vtheta;z_i)$,
+$\partial g/\partial\omega_i=n^{-1}\ell(\vtheta;z_i)$, which yields
+Eq.~\eqref{eq:loss-difference-gradient}. No differentiation through either
+argmin is required in this expression; the approximation error instead enters
+through finite $\alpha$ and incomplete tracking of the two minimizers.
+
+\section{Interpretation of Reference Points}
+
+The all-present point $\bm{1}$ is natural when asking for the infinitesimal
+effect of removing or downweighting an example from the full dataset. The
+budget-feasible uniform point $(B/n)\bm{1}$ is natural when asking how to
+redistribute a fixed selection budget. A one-shot attribution experiment may
+use the former, but a controlled comparison between reset and persistent
+budgeted optimization must use the latter. We report both when necessary and
+never silently project one into the other.
+
+\section{Go/No-Go Criteria}
+
+The main matrix is launched only if: (i) analytic, finite-difference, unrolled,
+and loss-difference gradients agree on the tractable problem; (ii) all weight
+states satisfy the capped-budget constraints; (iii) the chosen inner stopping
+rule yields stable scores; (iv) no test information is used for stopping or
+configuration selection; and (v) every run is reproducible from its saved
+configuration, random seeds, and initial subset. If verified VF remains below
+practical RHO, we report gradient agreement, inner residuals, score stability,
+and constraint audits before interpreting the gap as a method-level result.

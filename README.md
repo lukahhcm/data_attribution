@@ -1,78 +1,41 @@
-# Data attribution experiments
+# Data Attribution V2 experiments
 
-This package implements the frozen protocol in [PLAN.md](PLAN.md). It uses plain
-PyTorch and supports both one-process runs and `torchrun` DDP.
+This repository is the clean implementation root for the revised paper. It
+does not import the retired `online-K`, `block-K`, U1/UB, or fixed-alpha VF
+state machines.
 
-## Installation
+The frozen experimental specification is [PLAN.md](PLAN.md). The ICLR LaTeX
+draft and local PDF instructions are under [paper/](paper/).
 
-Install PyTorch using the command appropriate for the cluster CUDA version, then
-install this package:
+## What is ready
 
-```bash
-python -m pip install -e '.[dev]'
-```
+- budget-feasible persistent `OmegaState` with projected and calibrated-sigmoid variants;
+- the correctly signed finite-penalty F2SA loss-difference direction;
+- a polynomial/fixed penalty schedule (`penalty` in config is manuscript $\alpha_r$);
+- two neural inner steps for `theta_hat` and `theta_tilde`, with frozen BN buffers;
+- the preregistered inner convergence tracker;
+- shared warm-start and update-interval protocol primitives;
+- faithful practical RHO large-batch scoring with noncommitting BN statistics;
+- a strongly-convex exact-gradient gate and unit tests;
+- curated historical results with explicit reuse status.
 
-## Selector
+Stable dataset/model/training utilities were retained from the earlier
+experiment package. New method logic lives only in `omega.py`, `f2sa.py`,
+`selector.py`, `rho.py`, and `protocol.py`.
 
-```bash
-da-select --config configs/cifar10.yaml \
-  experiment.method=iterative_vf \
-  dataset.noise_rate=0.1 \
-  selection.retention=0.2 \
-  experiment.seed=1
-```
-
-DDP:
-
-```bash
-torchrun --standalone --nproc-per-node=4 -m data_attribution_exp.train_selector \
-  --config configs/cifar10.yaml experiment.method=iterative_vf
-```
-
-The selector writes `selected_indices.pt`. Train the independent evaluator with:
+## First commands
 
 ```bash
-da-eval --config configs/cifar10.yaml \
-  --selection-run outputs/cifar10/iterative_vf/seed_1
+python3.11 -m pip install -e '.[dev]'
+pytest -q
+python3.11 scripts/run_toy_gate.py
+python3.11 scripts/make_manifest.py --config configs/preflight/mnist.yaml
 ```
 
-Original online RHO:
+The neural end-to-end runner is intentionally the next layer to build after
+the correctness gate and final cluster/runtime interface are agreed. The
+current package contains the tested mathematical and protocol primitives it
+must call, preventing another monolithic runner from redefining VF semantics.
 
-```bash
-da-rho --config configs/cifar10.yaml experiment.method=original_rho
-```
-
-Configuration overrides use dotted `key=value` syntax. Values are parsed as
-YAML, so numbers, booleans, lists, and null work naturally.
-
-## Cluster sweep
-
-The first cluster pass contains both clean and 10% symmetric-label-noise runs
-for MNIST, CIFAR-10, and CIFAR-100. Generate separate manifests so evaluator
-jobs are submitted only after selector jobs finish:
-
-```bash
-mkdir -p manifests logs
-python scripts/make_manifest.py --stage selectors --output manifests/selectors.txt
-python scripts/make_manifest.py --stage evaluators --output manifests/evaluators.txt
-python scripts/make_manifest.py --stage baselines --output manifests/baselines.txt
-python scripts/make_manifest.py --stage rho --output manifests/rho.txt
-python scripts/make_manifest.py --stage ablations --seeds 1 2 3 --output manifests/ablations.txt
-```
-
-Submit a zero-based array whose upper bound is `line_count - 1`, for example:
-
-```bash
-N=$(wc -l < manifests/selectors.txt)
-sbatch --array="0-$((N-1))%32" --export=ALL,MANIFEST=manifests/selectors.txt scripts/slurm_array.sh
-```
-
-Use the scheduler dependency returned by that selector submission for the
-evaluator array. The preferred scaling mode is one independent configuration
-per GPU. For an unusually slow single selector, replace `da-select` with a
-site-specific `torchrun --nproc-per-node=... -m data_attribution_exp.train_selector`
-launcher and ensure all configured global batch sizes divide the GPU count.
-
-Selector runs checkpoint after every weight-update boundary. Resume with
-`experiment.resume=/absolute/path/to/selector_checkpoint.pt`; the model,
-optimizer, scheduler, AMP scaler, weights, and round counters are restored.
+The remaining server-side implementation work and its acceptance checklist
+are specified in Section 11 of [PLAN.md](PLAN.md).

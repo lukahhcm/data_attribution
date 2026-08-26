@@ -1,0 +1,129 @@
+\section{Experimental Design}
+\label{sec:experiments}
+
+\subsection{Stage 0: correctness gates}
+
+Before training image classifiers, we use a low-dimensional strongly convex
+problem for which the exact hypergradient is available. We compare (i) the
+analytic hypergradient, (ii) finite differences, (iii) fully unrolled
+autodifferentiation, and (iv) Eq.~\eqref{eq:loss-difference-gradient}. The
+sign must agree and pairwise cosine similarity must exceed $0.99$. We also
+test that projection preserves $0\leq\omega_i\leq1$ and
+$\sum_i\omega_i=B$, that the uniform state equals $B/n$, and that tie breaking
+is deterministic.
+
+On MNIST with 10\% label noise, we then hold $\vomega$ fixed and increase the
+number of inner updates. We record both inner optimality residuals, score
+cosine, Top-$B$ Jaccard similarity, and agreement with an independently
+retrained solution. The main study starts only after the selected stopping
+rule produces a stable score. Validation data determine stopping and
+hyperparameters; the test set is never used for either.
+
+\subsection{RQ1: correspondence and approximation diagnostics}
+
+At matched checkpoints and the same $\vomega$, we construct the following
+scores:
+\begin{enumerate}
+    \item exact or fully unrolled hypergradient on the tractable problem;
+    \item converged finite-penalty VF score, Eq.~\eqref{eq:vf-score};
+    \item truncated/warm-start VF score after a controlled number of inner
+    updates;
+    \item ideal RHO score with an updating joint comparator;
+    \item practical RHO score with a frozen holdout-only IL model.
+\end{enumerate}
+We report signed cosine similarity, Spearman rank correlation, Top-$B$
+overlap, and selected-noise fraction. We sweep the penalty multiplier
+$\alpha$, or a preregistered schedule $\alpha_r$, and report the associated
+inner residuals. This separates finite-penalty bias from optimization and
+frozen-comparator errors.
+
+\subsection{RQ2: one-shot versus multi-round optimization}
+
+All methods begin from the same model initialization and the same random
+budget-$B$ subset $S_0$. After the common warm start, we compare:
+\begin{center}
+\begin{tabular}{lll}
+\toprule
+ID & Method & Purpose \\
+\midrule
+U-fixed & fixed random subset & no reselection baseline \\
+U-round & random subset each round & reselection-only baseline \\
+RHO-1 & one practical RHO selection & one-shot practical attribution \\
+VF-1 & one verified VF step & one-shot value-function direction \\
+RHO-M & repeated practical RHO & practical multi-round selection \\
+VF-M & persistent projected VF & iterative outer optimization \\
+\bottomrule
+\end{tabular}
+\end{center}
+The outer update interval is the number of real target epochs between score
+updates,
+\begin{equation}
+\tau\in\{1,5,10,20,\infty\},
+\end{equation}
+where $\tau=\infty$ performs one selection only after the prescribed target
+training block. This variable replaces the earlier ``persistence horizon''
+and ``online steps'' sweeps: it directly controls when a new selector state can
+affect the real training trajectory. At each finite $\tau$, the continuous
+state persists; only a separate reset ablation returns it to
+$\vomega^{\mathrm{unif}}$.
+
+The primary estimand is the paired multi-round gain
+\begin{equation}
+\Delta_{\mathrm{multi}}
+=A(\mathrm{VF\mbox{-}M})-A(\mathrm{VF\mbox{-}1}),
+\end{equation}
+at equal target data and optimizer-step budgets. We also report target
+accuracy versus selected examples, accuracy versus wall-clock/compute,
+selected-noise fraction, class coverage, and selection turnover.
+
+\subsection{RQ3: nested approximation ablations}
+
+Starting from verified VF-M, we introduce one approximation at a time:
+\begin{enumerate}
+    \item reduce inner updates while keeping $\alpha$ and $\vomega$ fixed;
+    \item freeze the joint comparator, then replace it with a holdout-only IL
+    model;
+    \item replace global scoring with RHO's batch-local $n_B\!\to n_b$
+    protocol;
+    \item delay Top-$B$ discretization while retaining continuous updates;
+    \item reset the continuous state after each selection round.
+\end{enumerate}
+We additionally compare capped-simplex projection with the budget-calibrated
+sigmoid parameterization from Section~\ref{sec:formulation}; this is a
+parameterization ablation, not a different selection budget.
+Four diagnostic controls isolate the multi-round mechanism: frozen target
+state, frozen inner states, reset $\vomega$, and delayed Top-$B$. Their paired
+differences decompose gains due to changes in the target trajectory, inner
+tracking, persistent outer optimization, and repeated discretization.
+
+Target and inner batch sizes are separate variables. We first screen
+\texttt{target\_batch\_size}$\in\{32,128,\text{full selected set}\}$ with a
+fixed inner batch, then screen
+\texttt{inner\_batch\_size}$\in\{32,128,320,\text{full candidate set}\}$ at the
+chosen target batch. Comparisons match examples processed and separately
+report optimizer steps. Only the two best configurations are repeated with
+all seeds.
+
+The faithful practical RHO baseline follows the original online protocol:
+sample a large batch of $n_B=320$, compute frozen-IL reducible losses, select
+$n_b=32$, and immediately update the target on those examples. Selection and
+target-update BatchNorm statistics are computed on the large and selected
+batches, respectively. Global RHO scoring is reported as our extension rather
+than as the original RHO-LOSS algorithm.
+
+\subsection{Datasets, budgets, and staged execution}
+
+We proceed from MNIST to CIFAR-10 and CIFAR-100. The initial study uses clean
+and 10\% symmetric-label-noise conditions, 10\% retention, and three paired
+seeds. We expand to 20\% and 30\% noise only after the direction is stable
+across at least two of three seeds. After fixing the 10\% protocol, we evaluate
+retention in $\{5\%,10\%,15\%,20\%\}$ for U-round, VF-1, VF-M, and the best
+practical RHO variant.
+
+Every outer update stores the continuous weights, selected indices, raw and
+standardized scores, weight sum/minimum/maximum/effective sample size, both
+inner objectives and residuals, score cosine, Top-$B$ Jaccard similarity,
+class histogram, selected-noise fraction, target metrics, processed examples,
+optimizer steps, wall-clock time, and peak memory. A run is admissible only
+if its configuration, seeds, initial subset $S_0$, and all state transitions
+are reproducible.

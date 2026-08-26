@@ -1,0 +1,67 @@
+experiment:
+  protocol_id: local_to_multiround_v2
+  method: vf_multi
+  seed: 1
+  output_root: artifacts/main
+
+dataset:
+  name: cifar10
+  root: ./data
+  split_seed: 1
+  noise_seed: 1
+  noise_rate: 0.1
+  split_sizes: [40000, 5000, 5000]
+
+model:
+  name: cifar_resnet18
+
+protocol:
+  retention: 0.1
+  total_epochs: 80
+  warm_start_epochs: 10  # frozen only after uniform-fixed preflight
+  update_interval: 10
+  shared_initial_subset_seed: 1
+
+omega:
+  parameterization: projected
+  step_size: 0.1
+
+f2sa:
+  penalty:
+    initial: 10.0
+    power: 0.25
+  stopping:
+    relative_objective_tolerance: 0.001
+    score_cosine_threshold: 0.99
+    topk_jaccard_threshold: 0.95
+    patience: 3
+    maximum_passes: 50
+  candidate_batch_size: 320
+  validation_batch_size: 32
+  optimizer:
+    name: adamw
+    lr: 0.001
+    weight_decay: 0.01
+
+rho:
+  candidate_batch_size: 320
+  selected_batch_size: 32
+  selection_batch_statistics: true
+  reference_epochs: 30
+  reference_checkpoint: best_loss
+
+target:
+  batch_size: 32
+  eval_batch_size: 512
+  checkpoint: best_development_loss
+  optimizer:
+    name: adamw
+    lr: 0.001
+    weight_decay: 0.01
+  scheduler:
+    name: none
+
+runtime:
+  workers: 4
+  pin_memory: true
+  amp: true

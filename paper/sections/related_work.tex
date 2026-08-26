@@ -1,0 +1,26 @@
+\section{Related Work}
+
+Training-data attribution estimates how individual examples affect a learned
+model or a downstream objective. Influence functions approximate the effect
+of infinitesimal reweighting through an inverse-Hessian expression
+\citep{koh2017influence}; unrolling instead differentiates through a finite
+training trajectory. These methods naturally provide local directions, but
+budgeted data selection additionally requires a feasible outer state and a
+rule for applying multiple decisions.
+
+F2SA is a fully first-order method for stochastic bilevel optimization
+\citep{kwon2023f2sa}. It replaces second-order hypergradient calculations by
+tracking the minimizers of a lower objective and a penalized upper-plus-lower
+objective, while increasing the penalty multiplier and coordinating step
+sizes. Its theory assumes an unconstrained outer variable and a strongly
+convex lower objective. The present work uses its estimator structure but
+does not transfer those guarantees to projected neural-network data
+selection.
+
+RHO-LOSS selects examples with high current loss but low irreducible loss
+under a model trained on holdout data \citep{mindermann2022rholoss}. It was
+designed for online selection from a large pre-batch and emphasizes examples
+that are learnable, worth learning, and not yet learned. We distinguish its
+ideal joint-model derivation from the frozen IL-model approximation used by
+the practical algorithm, and place both in the common bilevel notation of
+Section~\ref{sec:connection}.

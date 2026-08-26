@@ -1,0 +1,50 @@
+\section{Research Questions}
+\label{sec:rqs}
+
+\paragraph{RQ1: When does the RHO loss difference behave as the predicted
+value-function descent direction?}
+The analytical answer is Eq.~\eqref{eq:rho-vf-equivalence}: ideal RHO and the
+negative finite-penalty VF gradient coincide when their objectives,
+normalizations, weight vector, and inner solutions coincide. The empirical
+answer measures how this correspondence degrades under finite inner training,
+a nonconverged target, and the frozen IL approximation. RQ1 is answered by
+gradient agreement and ranking stability, not primarily by final test
+accuracy.
+The preregistered hypothesis is that converged ideal RHO and VF agree up to
+numerical error, while most of the practical gap is explained by the frozen
+comparator and incomplete inner tracking rather than by the loss-difference
+identity itself.
+
+\paragraph{RQ2: Does iterative optimization improve data selection beyond a
+single attribution direction at uniform weights?}
+We compare a one-shot update from $\vomega^{\mathrm{unif}}$ with multiple
+updates of a persistent, budget-feasible continuous state. The target data
+budget is held fixed. We vary the number of target epochs between outer
+updates and require adequate inner tracking before interpreting a multi-round
+gain. RQ2 is answered by paired differences in downstream performance,
+selection quality, and compute, together with the trajectory of $\vomega$.
+The primary estimand is
+$\Delta_{\mathrm{multi}}=A(\mathrm{VF\mbox{-}M})-
+A(\mathrm{VF\mbox{-}1})$. We claim a multi-round benefit only when its paired
+interval is positive and the same conclusion survives an
+accuracy-versus-compute comparison.
+
+\paragraph{RQ3: Which approximations determine the
+performance--computation frontier?}
+We factor the path from ideal VF to practical RHO into the comparator
+(joint/updating versus holdout-only/frozen), inner accuracy, candidate scope
+(global versus batch-local), outer update interval, and continuous-to-discrete
+selection. RQ3 asks which components explain the gap between the theoretically
+motivated direction and the best practical selector. It is answered by a
+nested ablation ladder rather than by an unstructured method sweep.
+The hypothesis is not that the most faithful estimator always wins. Rather,
+the frozen IL and batch-local approximations may improve the practical
+frontier even while reducing agreement with the ideal direction. This RQ
+separates estimator fidelity from downstream usefulness.
+
+Together, the RQs support the paper's central claim only if the following
+logic holds: RQ1 validates the local connection; RQ2 tests whether optimizing
+that direction repeatedly creates a positive multi-round benefit; and RQ3
+locates the source and cost of that benefit. A failure of RQ1 blocks a
+theoretical interpretation of RQ2, although the resulting heuristic may still
+be reported as such.

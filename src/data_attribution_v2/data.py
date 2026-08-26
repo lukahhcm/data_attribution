@@ -164,12 +164,20 @@ def build_data(config: dict, download: bool = True) -> DataBundle:
     elif name == "cifar100":
         train_base = datasets.CIFAR100(root, train=True, download=download, transform=None)
         test_base = datasets.CIFAR100(root, train=False, download=download, transform=None)
-        split_sizes = (40_000, 5_000, 5_000)
+        # Preserve the historical 25k candidate scale while keeping a clean
+        # development split separate from the upper-level holdout objective.
+        split_sizes = (25_000, 20_000, 5_000)
         num_classes = 100
         input_shape = (3, 32, 32)
         score_transform, train_transform = _cifar_transforms(name)
     else:
         raise ValueError(f"Unsupported dataset: {name}")
+
+    configured_sizes = config.get("split_sizes")
+    if configured_sizes is not None:
+        if len(configured_sizes) != 3:
+            raise ValueError("dataset.split_sizes must contain candidate/validation/development")
+        split_sizes = tuple(int(value) for value in configured_sizes)
 
     all_labels = _targets(train_base)
     candidate_idx, validation_idx, development_idx = stratified_split(
@@ -197,6 +205,15 @@ def build_data(config: dict, download: bool = True) -> DataBundle:
         score_transform,
         score_transform,
     )
+    if str(config.get("development_from", "split")).lower() == "validation":
+        development_idx = validation_idx.copy()
+        development = IndexedViews(
+            train_base,
+            development_idx,
+            all_labels[development_idx],
+            score_transform,
+            score_transform,
+        )
     test_indices = np.arange(len(test_base), dtype=np.int64)
     test_labels = _targets(test_base)
     test = IndexedViews(

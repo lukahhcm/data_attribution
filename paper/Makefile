@@ -1,8 +1,11 @@
 .PHONY: pdf open clean
 
+LATEXMK ?= $(HOME)/Library/TinyTeX/bin/universal-darwin/latexmk
+TEXBIN := $(dir $(LATEXMK))
+
 pdf:
 	mkdir -p build
-	tectonic --keep-logs --keep-intermediates --outdir build main.tex
+	PATH="$(TEXBIN):$$PATH" "$(LATEXMK)" -pdf -interaction=nonstopmode -halt-on-error -outdir=build main.tex
 
 open: pdf
 	open build/main.pdf

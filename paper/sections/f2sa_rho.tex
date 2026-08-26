@@ -40,7 +40,7 @@ of the minimized penalty is
 \right].
 \label{eq:f2sa-gradient}
 \end{equation}
-For the linear weighting in Eq.~\eqref{eq:fg}, its $i$th coordinate is
+For the linear weighting in Eq.~(\ref{eq:fg}), its $i$th coordinate is
 \begin{equation}
 \left[\nabla_{\vomega}\mathcal{L}^{\alpha,\star}(\vomega)\right]_i
 =\frac{\alpha}{n}\left[
@@ -62,7 +62,7 @@ direction, subject to inner-solution and finite-$\alpha$ errors. The same
 $\alpha$ must appear in both the penalized inner objective and the outer
 gradient. A fixed value is a finite-penalty approximation; a scheduled value
 must be coordinated with the inner and outer step sizes. Score
-standardization removes only the global scale of Eq.~\eqref{eq:f2sa-gradient},
+standardization removes only the global scale of Eq.~(\ref{eq:f2sa-gradient}),
 not the dependence of $\thetatilde$ on $\alpha$.
 
 \subsection{Ideal and practical RHO-LOSS}
@@ -74,14 +74,14 @@ Bayesian derivation targets the example that would most reduce predictive
 holdout loss. After replacing Bayesian posteriors with trained point-estimate
 models, the idealized score can be written in our notation as
 \begin{equation}
-\rhoideal_i(\vomega)
+s_{i,\mathrm{RHO}}^{\mathrm{ideal}}(\vomega)
 =\ell(\thetahat(\vomega);z_i)
 -\ell(\thetatilde(\vomega);z_i),
 \label{eq:ideal-rho}
 \end{equation}
 where the second model incorporates both the holdout objective and the data
-represented by $\vomega$. Comparing Eqs.~\eqref{eq:vf-score} and
-\eqref{eq:ideal-rho} gives
+represented by $\vomega$. Comparing Eqs.~(\ref{eq:vf-score}) and
+(\ref{eq:ideal-rho}) gives
 \begin{equation}
 \rhoideal(\vomega)
 =s^{\mathrm{VF}}(\vomega)
@@ -91,7 +91,7 @@ represented by $\vomega$. Comparing Eqs.~\eqref{eq:vf-score} and
 \end{equation}
 This is an equality of directions at a fixed $\vomega$ under exact inner
 solutions and aligned objective normalizations. It does not say that one
-Top-$b$ RHO step solves Eq.~\eqref{eq:bilevel-selection}.
+Top-$b$ RHO step solves Eq.~(\ref{eq:bilevel-selection}).
 
 Practical RHO-LOSS makes an additional approximation. It trains an
 irreducible-loss model once on $\Dval$,
@@ -100,14 +100,14 @@ irreducible-loss model once on $\Dval$,
 \end{equation}
 freezes it, and uses
 \begin{equation}
-\rhopractical_i(t)
+s_{i,\mathrm{RHO}}^{\mathrm{practical}}(t)
 =\ell(\vtheta_t;z_i)-\ell(\thetaIL;z_i),
 \label{eq:practical-rho}
 \end{equation}
 where $\vtheta_t$ is the current, generally nonconverged target model. This
 removes the need to update the joint comparator as selected data change. It
-also means Eq.~\eqref{eq:practical-rho} is not, in general, the exact gradient
-in Eq.~\eqref{eq:rho-vf-equivalence}. The RHO-LOSS paper finds this frozen
+also means Eq.~(\ref{eq:practical-rho}) is not, in general, the exact gradient
+in Eq.~(\ref{eq:rho-vf-equivalence}). The RHO-LOSS paper finds this frozen
 approximation computationally useful and sometimes empirically preferable;
 our framework treats that as a testable approximation rather than an
 identity.

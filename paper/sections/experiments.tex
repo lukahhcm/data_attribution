@@ -6,7 +6,7 @@
 Before training image classifiers, we use a low-dimensional strongly convex
 problem for which the exact hypergradient is available. We compare (i) the
 analytic hypergradient, (ii) finite differences, (iii) fully unrolled
-autodifferentiation, and (iv) Eq.~\eqref{eq:loss-difference-gradient}. The
+autodifferentiation, and (iv) Eq.~(\ref{eq:loss-difference-gradient}). The
 sign must agree and pairwise cosine similarity must exceed $0.99$. We also
 test that projection preserves $0\leq\omega_i\leq1$ and
 $\sum_i\omega_i=B$, that the uniform state equals $B/n$, and that tie breaking
@@ -25,7 +25,7 @@ At matched checkpoints and the same $\vomega$, we construct the following
 scores:
 \begin{enumerate}
     \item exact or fully unrolled hypergradient on the tractable problem;
-    \item converged finite-penalty VF score, Eq.~\eqref{eq:vf-score};
+    \item converged finite-penalty VF score, Eq.~(\ref{eq:vf-score});
     \item truncated/warm-start VF score after a controlled number of inner
     updates;
     \item ideal RHO score with an updating joint comparator;
@@ -96,13 +96,12 @@ state, frozen inner states, reset $\vomega$, and delayed Top-$B$. Their paired
 differences decompose gains due to changes in the target trajectory, inner
 tracking, persistent outer optimization, and repeated discretization.
 
-Target and inner batch sizes are separate variables. We first screen
-\texttt{target\_batch\_size}$\in\{32,128,\text{full selected set}\}$ with a
-fixed inner batch, then screen
-\texttt{inner\_batch\_size}$\in\{32,128,320,\text{full candidate set}\}$ at the
-chosen target batch. Comparisons match examples processed and separately
-report optimizer steps. Only the two best configurations are repeated with
-all seeds.
+Target and inner batch sizes are separate variables. We first compare target
+batches of 32 and 128 examples with the full selected set as a third option.
+After fixing that choice, we compare inner batches of 32, 128, and 320 examples
+with the full candidate set. Comparisons match examples processed and
+separately report optimizer steps. Only the two best configurations are
+repeated with all seeds.
 
 The faithful practical RHO baseline follows the original online protocol:
 sample a large batch of $n_B=320$, compute frozen-IL reducible losses, select

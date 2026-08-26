@@ -1,7 +1,7 @@
 \section{From a Local Attribution Direction to Multi-Round Selection}
 \label{sec:single-to-multi}
 
-Equation~\eqref{eq:rho-vf-equivalence} is a local statement: at a fixed
+Equation~\ref{eq:rho-vf-equivalence} is a local statement: at a fixed
 $\vomega$, a two-model loss difference supplies a descent direction for a
 finite-penalty surrogate. Data selection is instead a constrained, path-
 dependent decision problem. It must specify an initial state, how long the
@@ -20,8 +20,8 @@ At the end of the common warm start, a one-shot method constructs one score at
 $\vomega^{\mathrm{unif}}$, takes one feasible update, selects
 $S_1=\operatorname{TopB}(\vomega_1)$, and keeps $S_1$ fixed for the remaining
 target-training budget. Practical RHO-1 uses the frozen IL score in
-Eq.~\eqref{eq:practical-rho}; VF-1 uses the verified two-inner direction in
-Eq.~\eqref{eq:vf-score}.
+Eq.~(\ref{eq:practical-rho}); VF-1 uses the verified two-inner direction in
+Eq.~(\ref{eq:vf-score}).
 
 \paragraph{Multiple rounds.}
 A multi-round method retains the continuous state $\vomega_r$. After every

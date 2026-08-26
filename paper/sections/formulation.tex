@@ -43,12 +43,12 @@ examples are fully present---but lies outside $\Wbudget$ whenever $B<n$.
 Conflating these two reference points creates an artificial first projection
 that can dominate the score update.
 
-Equation~\eqref{eq:bilevel-selection} is our optimization target, not a claim
+Equation~\ref{eq:bilevel-selection} is our optimization target, not a claim
 that the nonconvex neural-network problem satisfies the assumptions used in
 all bilevel convergence analyses. In particular, the F2SA theory assumes an
 unconstrained outer variable and a strongly convex lower problem. We use its
 value-function construction to derive an estimator, and treat projection onto
-\eqref{eq:capped-simplex} as an explicit algorithmic adaptation whose behavior
+the set in Eq.~(\ref{eq:capped-simplex}) as an explicit algorithmic adaptation whose behavior
 must be tested empirically.
 
 F2SA's MNIST hyper-cleaning experiment instead optimizes unconstrained logits

@@ -4,7 +4,12 @@ The loss difference shared by ideal RHO-LOSS and the F2SA value-function
 construction supplies a precise local bridge between attribution and
 selection. The bridge is conditional: it depends on aligned objectives and
 adequately tracked inner solutions, and practical RHO-LOSS adds a frozen
-comparator approximation. Our research questions and staged experiments are
-designed to determine whether repeatedly optimizing this direction produces a
-real data-selection benefit and which approximation offers the best use of
-additional computation.
+comparator approximation as well as a distinct online protocol. The proposed
+fixed-horizon experiment makes the decisive comparison explicit: one-shot
+selection, repeated reset scoring, and persistent continuous optimization are
+evaluated after identical real target training. The complementary RHO ladder
+then separates score fidelity from local quota, immediate updates, online
+rescoring, and batch scale. Together, these tests can establish not only
+whether multi-round selection helps, but whether the gain comes from optimizing
+utility beyond the uniform point or from the practical mechanics of online
+training.

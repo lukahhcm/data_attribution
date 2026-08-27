@@ -3,11 +3,11 @@
 
 \input{math_commands.tex}
 
-\usepackage{amsmath,amssymb,booktabs,microtype,xcolor}
-\usepackage{hyperref}
+\usepackage{amsmath,amssymb,booktabs,microtype,tabularx,xcolor}
+\usepackage[hidelinks]{hyperref}
 \usepackage{url}
 
-\title{From One-Shot Attribution to Iterative Data Selection}
+\title{Beyond One-Shot Attribution: Multi-Round Bilevel Data Selection}
 
 \author{Anonymous Authors}
 
@@ -25,25 +25,23 @@
 \maketitle
 
 \begin{abstract}
-Data attribution assigns a score to each training example, whereas data
-selection must repeatedly decide which examples to train on under a finite
-budget. We connect these tasks through a common bilevel program over
-continuous example weights. In this formulation, the value-function penalty
-used by fully first-order stochastic bilevel optimization (F2SA) yields a
-two-model, per-example loss difference. The idealized form of Reducible
-Holdout Loss Selection (RHO-LOSS) has exactly the same direction at a fixed
-weight vector, while practical RHO-LOSS introduces an additional frozen
-holdout-model approximation. This distinction exposes why a one-shot
-attribution score need not solve data selection and identifies the algorithmic
-choices that can create gains in a multi-round procedure. We turn the
-connection into three falsifiable research questions: whether the predicted
-gradient correspondence holds in finite neural-network training, whether
-iterative optimization of persistent weights improves over a single score at
-uniform weights, and which approximations determine the
-performance--computation trade-off. Our experimental protocol separates
-inner-solution accuracy, outer update frequency, batch size, budget, and
-continuous-to-discrete projection, with correctness gates preceding all
-large-scale comparisons.
+Data attribution evaluates a local change in training-example utility, whereas
+data selection must optimize a feasible subset along a changing training
+trajectory. We connect the two through a bilevel program whose outer state is
+a continuous, fixed-budget weight vector. The value-function penalty used by
+fully first-order stochastic bilevel optimization (F2SA) yields a two-model
+per-example loss difference; idealized Reducible Holdout Loss Selection
+(RHO-LOSS) gives the same direction at a fixed state, while practical RHO-LOSS
+also changes the comparator, candidate scope, scoring frequency, and training
+timing. This view turns ``attribution then selection'' into a controlled
+multi-round question. Under a fixed target-training horizon, we compare one to
+five complete inner-solve/outer-update rounds, reset and persistent continuous
+weights, and matched random controls. We then factor practical RHO into global
+versus batch-local quotas, stale versus online scores, immediate updates, and
+frozen versus updating comparators, including a dedicated batch-size scaling
+study. The resulting design tests whether gains come from optimizing utility
+beyond the uniform point, from merely recomputing a local score, or from the
+online protocol rather than the score formula itself.
 \end{abstract}
 
 \input{sections/introduction}

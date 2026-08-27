@@ -1,128 +1,182 @@
 \section{Experimental Design}
 \label{sec:experiments}
 
-\subsection{Stage 0: correctness gates}
+\subsection{Correctness gates}
 
-Before training image classifiers, we use a low-dimensional strongly convex
-problem for which the exact hypergradient is available. We compare (i) the
-analytic hypergradient, (ii) finite differences, (iii) fully unrolled
-autodifferentiation, and (iv) Eq.~(\ref{eq:loss-difference-gradient}). The
-sign must agree and pairwise cosine similarity must exceed $0.99$. We also
-test that projection preserves $0\leq\omega_i\leq1$ and
-$\sum_i\omega_i=B$, that the uniform state equals $B/n$, and that tie breaking
-is deterministic.
+Before the main matrix, a low-dimensional strongly convex problem compares the
+analytic hypergradient, finite differences, unrolled autodifferentiation, and
+Eq.~(\ref{eq:loss-difference-gradient}). The sign must agree and pairwise
+cosine similarity must exceed $0.99$. Projection tests require
+$0\leq\omega_i\leq1$, $\sum_i\omega_i=B$, deterministic Top-$B$ tie breaking,
+and exact recovery of $\vomega^{\mathrm{unif}}$. On MNIST with 10\% label
+noise, we then hold $\vomega$ fixed and increase inner passes until both inner
+residuals, score cosine, and Top-$B$ Jaccard similarity stabilize. Fixed inner
+passes are used in the main matrix; an adaptive convergence rule is retained
+only as the high-fidelity RQ1 reference.
 
-On MNIST with 10\% label noise, we then hold $\vomega$ fixed and increase the
-number of inner updates. We record both inner optimality residuals, score
-cosine, Top-$B$ Jaccard similarity, and agreement with an independently
-retrained solution. The main study starts only after the selected stopping
-rule produces a stable score. Validation data determine stopping and
-hyperparameters; the test set is never used for either.
+\subsection{Fixed budget and common training contract}
 
-\subsection{RQ1: correspondence and approximation diagnostics}
+The candidate set has $n$ examples and every real target epoch uses exactly
+$B=0.1n$ unique examples. The selector maintains
+\begin{equation}
+\Wbudget=\{\vomega\in[0,1]^n:\textstyle\sum_i\omega_i=B\},
+\qquad S_r=\operatorname{TopB}(\vomega_r).
+\end{equation}
+Here $\vomega$ is the continuous outer state, the score is its update
+direction, and $S_r$ is used only to train the target. Every paired comparison
+fixes the data split, noise realization, initialization, warm-start checkpoint,
+target architecture, AdamW optimizer, scheduler, target epochs, and examples
+per epoch. Development data select configurations; the test set is evaluated
+once at each preregistered endpoint.
 
-At matched checkpoints and the same $\vomega$, we construct the following
-scores:
-\begin{enumerate}
-    \item exact or fully unrolled hypergradient on the tractable problem;
-    \item converged finite-penalty VF score, Eq.~(\ref{eq:vf-score});
-    \item truncated/warm-start VF score after a controlled number of inner
-    updates;
-    \item ideal RHO score with an updating joint comparator;
-    \item practical RHO score with a frozen holdout-only IL model.
-\end{enumerate}
-We report signed cosine similarity, Spearman rank correlation, Top-$B$
-overlap, and selected-noise fraction. We sweep the penalty multiplier
-$\alpha$, or a preregistered schedule $\alpha_r$, and report the associated
-inner residuals. This separates finite-penalty bias from optimization and
-frozen-comparator errors.
-
-\subsection{RQ2: one-shot versus multi-round optimization}
-
-All methods begin from the same model initialization and the same random
-budget-$B$ subset $S_0$. After the common warm start, we compare:
-\begin{center}
-\begin{tabular}{lll}
+\begin{table}[t]
+\centering
+\caption{Dataset contracts. $L$ is one target-training block after the shared
+warm start and $H=5L$ is fixed across all freeze-$R$ branches.}
+\label{tab:datasets}
+\small
+\begin{tabular}{lrrrr}
 \toprule
-ID & Method & Purpose \\
+Dataset & candidate/dev/test & warm start & $L$ & $H$ \\
 \midrule
-U-fixed & fixed random subset & no reselection baseline \\
-U-round & random subset each round & reselection-only baseline \\
-RHO-1 & one practical RHO selection & one-shot practical attribution \\
-VF-1 & one verified VF step & one-shot value-function direction \\
-RHO-M & repeated practical RHO & practical multi-round selection \\
-VF-M & persistent projected VF & iterative outer optimization \\
+MNIST & 50k/5k/5k & 10 & 30 & 150 \\
+CIFAR-10 & 40k/5k/5k & 20 & 80 & 400 \\
+CIFAR-100 & 25k/25k/10k & 20 & 100 & 500 \\
 \bottomrule
 \end{tabular}
-\end{center}
-The outer update interval is the number of real target epochs between score
-updates,
-\begin{equation}
-\tau\in\{1,5,10,20,\infty\},
-\end{equation}
-where $\tau=\infty$ performs one selection only after the prescribed target
-training block. This variable replaces the earlier ``persistence horizon''
-and ``online steps'' sweeps: it directly controls when a new selector state can
-affect the real training trajectory. At each finite $\tau$, the continuous
-state persists; only a separate reset ablation returns it to
-$\vomega^{\mathrm{unif}}$.
+\end{table}
 
-The primary estimand is the paired multi-round gain
-\begin{equation}
-\Delta_{\mathrm{multi}}
-=A(\mathrm{VF\mbox{-}M})-A(\mathrm{VF\mbox{-}1}),
-\end{equation}
-at equal target data and optimizer-step budgets. We also report target
-accuracy versus selected examples, accuracy versus wall-clock/compute,
-selected-noise fraction, class coverage, and selection turnover.
+The main corruption is 10\% symmetric label noise with paired seeds 1--3; a
+clean condition is the required negative control. Noise rates of 20\% and 30\%
+are later extensions rather than degrees of freedom in the primary result.
 
-\subsection{RQ3: nested approximation ablations}
+\subsection{RQ1/RQ2: fixed-horizon block protocol}
 
-Starting from verified VF-M, we introduce one approximation at a time:
+After the common warm start, the target runs for five blocks. At the start of
+each block, a method may execute one complete selection update. For
+$R\in\{1,2,3,4,5\}$, the selector updates at the first $R$ boundaries, then
+freezes its state and Top-$B$ subset while the target continues to the common
+horizon $H$. We save a complete checkpoint after every block and branch each
+freeze-$R$ continuation from the corresponding boundary. This construction
+holds target epochs, target examples, optimizer, and scheduler fixed as the
+number of bilevel rounds changes.
+
+\begin{table}[t]
+\centering
+\caption{Methods in the block protocol. ``Persistent'' means that the same
+continuous $\vomega_r$ is updated across rounds.}
+\label{tab:block-methods}
+\small
+\begin{tabularx}{\textwidth}{l c X}
+\toprule
+Method & memory & Boundary operation \\
+\midrule
+Uniform-Block-$R$ & no & Random Top-$10\%$ at the first $R$ boundaries, then freeze. \\
+RHO-Reset-$R$ & no & Recompute a practical-RHO direction from $\vomega^{\mathrm{unif}}$. \\
+RHO-Persistent-$R$ & yes & Update and project the previous $\vomega_r$ using practical RHO. \\
+VF-Reset-$R$ & no & Apply the standard two-inner VF update from $\vomega^{\mathrm{unif}}$. \\
+VF-Persistent-$R$ & yes & Apply the two-inner VF update to the previous $\vomega_r$. \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+The $R=1$ branch is one-shot attribution-then-selection. One VF round updates
+the two inner models under the preregistered pass count, evaluates the global
+score, takes one projected outer step, and deploys Top-$B$ for the next block.
+The strict reference maintains
+\begin{align}
+\thetahat(\vomega)&\leftarrow\argmin_{\vtheta}g(\vomega,\vtheta),\\
+\thetatilde(\vomega)&\leftarrow\argmin_{\vtheta}
+\{f(\vtheta)+\alpha_r g(\vomega,\vtheta)\},\\
+s_i&=\ell(\thetahat;z_i)-\ell(\thetatilde;z_i),
+\end{align}
+with the fixed schedule $\alpha_r=\alpha_0(1+r)^p$. The same $\alpha_r$ enters
+the penalized inner objective and its outer direction.
+
+At every boundary we save the target, $\thetahat$, $\thetatilde$, all
+optimizer and scheduler states, continuous $\vomega$, raw scores, Top-$B$
+indices, BatchNorm buffers, random-number-generator states, and development
+metrics. The key paired contrasts are Persistent-$R$ versus Persistent-1
+(additional complete rounds), Reset-$R$ versus Reset-1 (rescoring alone), and
+Persistent-$R$ versus Reset-$R$ (outer memory).
+
+\subsection{RQ3: separating the RHO score from its protocol}
+
+We add practical RHO mechanisms in a fixed order:
 \begin{enumerate}
-    \item reduce inner updates while keeping $\alpha$ and $\vomega$ fixed;
-    \item freeze the joint comparator, then replace it with a holdout-only IL
-    model;
-    \item replace global scoring with RHO's batch-local $n_B\!\to n_b$
-    protocol;
-    \item delay Top-$B$ discretization while retaining continuous updates;
-    \item reset the continuous state after each selection round.
+    \item \textbf{RHO-Global-TopB:} score all candidates at a block boundary,
+    take global Top-$10\%$, and train for the block;
+    \item \textbf{RHO-GlobalScore-LocalQuota:} keep that block-start score but
+    take Top-$10\%$ separately within each candidate batch;
+    \item \textbf{RHO-Stale-Online:} immediately update the target after each
+    local selection while retaining the block-start scores; and
+    \item \textbf{RHO-Batch-Faithful:} rescore every candidate batch with the
+    latest target, take local Top-$10\%$, and update immediately.
 \end{enumerate}
-We additionally compare capped-simplex projection with the budget-calibrated
-sigmoid parameterization from Section~\ref{sec:formulation}; this is a
-parameterization ablation, not a different selection budget.
-Four diagnostic controls isolate the multi-round mechanism: frozen target
-state, frozen inner states, reset $\vomega$, and delayed Top-$B$. Their paired
-differences decompose gains due to changes in the target trajectory, inner
-tracking, persistent outer optimization, and repeated discretization.
+At the same protocol points, we substitute three score sources: strict VF;
+current target plus an updating joint comparator; and current target plus the
+frozen holdout IL model. The resulting grid separates error in the
+loss-difference approximation from the diversity and adaptation effects of
+the online training protocol.
 
-Target and inner batch sizes are separate variables. We first compare target
-batches of 32 and 128 examples with the full selected set as a third option.
-After fixing that choice, we compare inner batches of 32, 128, and 320 examples
-with the full candidate set. Comparisons match examples processed and
-separately report optimizer steps. Only the two best configurations are
-repeated with all seeds.
+\subsection{Priority experiment: RHO batch-size scaling}
 
-The faithful practical RHO baseline follows the original online protocol:
-sample a large batch of $n_B=320$, compute frozen-IL reducible losses, select
-$n_b=32$, and immediately update the target on those examples. Selection and
-target-update BatchNorm statistics are computed on the large and selected
-batches, respectively. Global RHO scoring is reported as our extension rather
-than as the original RHO-LOSS algorithm.
+We define $n_b$ as the selected batch immediately used for one target update
+and set the candidate batch to $n_B=10n_b$. Thus local retention remains 10\%:
+\begin{table}[t]
+\centering
+\caption{Online batch scale. The five points reuse one reference-model
+checkpoint within each dataset, split, and seed.}
+\label{tab:rho-batch}
+\small
+\begin{tabular}{rrr}
+\toprule
+Selected $n_b$ & Candidate $n_B$ & local retention \\
+\midrule
+32 & 320 & 10\% \\
+64 & 640 & 10\% \\
+128 & 1,280 & 10\% \\
+256 & 2,560 & 10\% \\
+512 & 5,120 & 10\% \\
+\bottomrule
+\end{tabular}
+\end{table}
+The final incomplete candidate batch selects the rounded 10\% quota, followed
+by an epoch-level exact-budget correction so that precisely $0.1n$ distinct
+examples are trained on. Increasing $n_b$ holds target examples fixed but
+reduces target optimizer steps; this is part of the intervention. We therefore
+report progress against examples, optimizer steps, and wall-clock rather than
+calling the sweep a pure diversity test.
 
-\subsection{Datasets, budgets, and staged execution}
+Every point compares \textbf{RHO-Batch-Faithful} with
+\textbf{Uniform-Batch-Matched}, which shares candidate order, local quota,
+immediate-update timing, target batches, and step counts but replaces ranking
+with uniform sampling. The frozen IL/reference model is always trained with
+batch size 32, and all five online scales for a fixed dataset, seed, and split
+load the same reference checkpoint.
 
-We proceed from MNIST to CIFAR-10 and CIFAR-100. The initial study uses clean
-and 10\% symmetric-label-noise conditions, 10\% retention, and three paired
-seeds. We expand to 20\% and 30\% noise only after the direction is stable
-across at least two of three seeds. After fixing the 10\% protocol, we evaluate
-retention in $\{5\%,10\%,15\%,20\%\}$ for U-round, VF-1, VF-M, and the best
-practical RHO variant.
+\subsection{Execution waves, metrics, and decision rules}
 
-Every outer update stores the continuous weights, selected indices, raw and
-standardized scores, weight sum/minimum/maximum/effective sample size, both
-inner objectives and residuals, score cosine, Top-$B$ Jaccard similarity,
-class histogram, selected-noise fraction, target metrics, processed examples,
-optimizer steps, wall-clock time, and peak memory. A run is admissible only
-if its configuration, seeds, initial subset $S_0$, and all state transitions
-are reproducible.
+Wave 1 runs MNIST and CIFAR-10 with 10\% noise, seed 1, all five batch scales,
+and both matched methods. Wave 2 expands every point to seeds 1--3. Wave 3
+checks representative points on CIFAR-100 and the clean condition; only
+development results choose those points. Wave 4 launches the block-protocol
+matrix for $R=1,\ldots,5$.
+
+Primary outcomes are final test accuracy and best development loss. Mechanism
+metrics are selected-noise rate, class entropy, cumulative unique coverage,
+adjacent-round turnover, and the trajectories of $\vomega$ and score rank.
+Resource metrics are target examples and optimizer steps, scoring examples,
+wall time, and peak GPU memory. Accuracy-versus-target-data and
+accuracy-versus-total-compute are both mandatory whenever methods process
+different auxiliary examples.
+
+We interpret results under four preregistered boundaries. If Persistent-$R$
+improves with $R$ and exceeds Reset-$R$, the evidence supports optimizing
+weights beyond one local direction at uniform utility. If Reset-$R$ improves
+but Persistent-$R$ does not, the gain is attributed to fresh scores rather than
+outer memory. If batch-faithful RHO wins only for small $n_b$, the candidate
+explanations are local quota, online adaptation, and optimizer-step
+granularity---not automatically a more accurate VF approximation. Finally, no
+configuration selected using test performance is eligible for a primary
+claim.

@@ -1,50 +1,38 @@
 \section{Research Questions}
 \label{sec:rqs}
 
-\paragraph{RQ1: When does the RHO loss difference behave as the predicted
-value-function descent direction?}
-The analytical answer is Eq.~(\ref{eq:rho-vf-equivalence}): ideal RHO and the
-negative finite-penalty VF gradient coincide when their objectives,
-normalizations, weight vector, and inner solutions coincide. The empirical
-answer measures how this correspondence degrades under finite inner training,
-a nonconverged target, and the frozen IL approximation. RQ1 is answered by
-gradient agreement and ranking stability, not primarily by final test
-accuracy.
-The preregistered hypothesis is that converged ideal RHO and VF agree up to
-numerical error, while most of the practical gap is explained by the frozen
-comparator and incomplete inner tracking rather than by the loss-difference
-identity itself.
+\paragraph{RQ1: Uniform utility versus optimized utility.}
+Does replacing one attribution update at
+$\vomega^{\mathrm{unif}}$ with a persistent sequence of continuous,
+budget-feasible weights produce a better Top-$10\%$ subset? We answer with the
+paired gap between persistent and reset branches at each common freeze point.
+An improvement over one-shot alone is insufficient: persistent optimization
+must also beat repeated reset scoring to establish a benefit from outer
+memory. The supporting diagnostics are development loss, selected-noise rate,
+weight movement, subset turnover, and final performance at the common horizon.
 
-\paragraph{RQ2: Does iterative optimization improve data selection beyond a
-single attribution direction at uniform weights?}
-We compare a one-shot update from $\vomega^{\mathrm{unif}}$ with multiple
-updates of a persistent, budget-feasible continuous state. The target data
-budget is held fixed. We vary the number of target epochs between outer
-updates and require adequate inner tracking before interpreting a multi-round
-gain. RQ2 is answered by paired differences in downstream performance,
-selection quality, and compute, together with the trajectory of $\vomega$.
-The primary estimand is
-$\Delta_{\mathrm{multi}}=A(\mathrm{VF\mbox{-}M})-
-A(\mathrm{VF\mbox{-}1})$. We claim a multi-round benefit only when its paired
-interval is positive and the same conclusion survives an
-accuracy-versus-compute comparison.
+\paragraph{RQ2: How does selection scale with complete bilevel rounds?}
+When the full inner-update, outer-score, weight-projection, and Top-$B$
+deployment cycle is repeated $R\in\{1,2,3,4,5\}$ times, does performance
+improve monotonically or saturate? Every branch trains the target to the same
+$H=5L$ horizon, so $R$ changes selection opportunities but not real target
+epochs or examples. We report the entire freeze-$R$ curve rather than choosing
+one round count on test data, and pair accuracy-versus-target-data with
+accuracy-versus-total-compute.
 
-\paragraph{RQ3: Which approximations determine the
-performance--computation frontier?}
-We factor the path from ideal VF to practical RHO into the comparator
-(joint/updating versus holdout-only/frozen), inner accuracy, candidate scope
-(global versus batch-local), outer update interval, and continuous-to-discrete
-selection. RQ3 asks which components explain the gap between the theoretically
-motivated direction and the best practical selector. It is answered by a
-nested ablation ladder rather than by an unstructured method sweep.
-The hypothesis is not that the most faithful estimator always wins. Rather,
-the frozen IL and batch-local approximations may improve the practical
-frontier even while reducing agreement with the ideal direction. This RQ
-separates estimator fidelity from downstream usefulness.
+\paragraph{RQ3: Which technical choices create practical RHO's gains?}
+We factor RHO into four protocol choices---global versus batch-local quota,
+blockwise versus immediate target updates, stale versus online scores, and an
+updating joint comparator versus a frozen holdout IL model. At matched protocol
+points we also substitute the strict VF, updating-comparator, and frozen-IL
+score formulas. This design asks separately whether a gain comes from a more
+useful loss difference, greater batch diversity, faster adaptation, or finer
+optimizer-step granularity. Batch-size scaling is the priority experiment
+because it simultaneously controls the size of the local ranking pool and the
+number of immediate target updates.
 
-Together, the RQs support the paper's central claim only if the following
-logic holds: RQ1 validates the local connection; RQ2 tests whether optimizing
-that direction repeatedly creates a positive multi-round benefit; and RQ3
-locates the source and cost of that benefit. A failure of RQ1 blocks a
-theoretical interpretation of RQ2, although the resulting heuristic may still
-be reported as such.
+The algebraic correspondence in Section~\ref{sec:connection} is treated as a
+correctness precondition, not a standalone performance RQ. Gradient sign,
+inner tracking, budget projection, and ranking agreement must pass the gates in
+Section~\ref{sec:experiments} before the three questions above receive a
+value-function interpretation.

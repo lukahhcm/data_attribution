@@ -1,26 +1,34 @@
 \section{Related Work}
 
-Training-data attribution estimates how individual examples affect a learned
-model or a downstream objective. Influence functions approximate the effect
-of infinitesimal reweighting through an inverse-Hessian expression
-\citep{koh2017influence}; unrolling instead differentiates through a finite
-training trajectory. These methods naturally provide local directions, but
-budgeted data selection additionally requires a feasible outer state and a
-rule for applying multiple decisions.
+\paragraph{Attribution and bilevel example reweighting.}
+Training-data attribution assigns examples credit for a prediction or utility:
+influence functions differentiate an infinitesimal reweighting at a fitted
+model \citep{koh2017influence}, TracIn accumulates first-order influence along
+saved training checkpoints \citep{pruthi2020tracin}, and Data Shapley averages
+marginal utility over data coalitions \citep{ghorbani2019datashapley}. A
+complementary line directly learns training weights from clean validation
+loss, either through a one-step meta-gradient \citep{ren2018reweight} or by
+unrolling an approximate bilevel problem \citep{franceschi2018bilevel}.
+F2SA removes Hessian calculations by tracking a lower solution and a penalized
+joint solution with first-order updates \citep{kwon2023f2sa}. These methods
+differ in utility and approximation, but they all clarify that an attribution
+score is tied to an evaluation point or trajectory. Our question is narrower
+than a new valuation axiom: under a fixed cardinality budget, does maintaining
+and updating the same continuous $\vomega$ improve the subset beyond repeated
+local scores at $\vomega^{\mathrm{unif}}$?
 
-F2SA is a fully first-order method for stochastic bilevel optimization
-\citep{kwon2023f2sa}. It replaces second-order hypergradient calculations by
-tracking the minimizers of a lower objective and a penalized upper-plus-lower
-objective, while increasing the penalty multiplier and coordinating step
-sizes. Its theory assumes an unconstrained outer variable and a strongly
-convex lower objective. The present work uses its estimator structure but
-does not transfer those guarantees to projected neural-network data
-selection.
-
-RHO-LOSS selects examples with high current loss but low irreducible loss
-under a model trained on holdout data \citep{mindermann2022rholoss}. It was
-designed for online selection from a large pre-batch and emphasizes examples
-that are learnable, worth learning, and not yet learned. We distinguish its
-ideal joint-model derivation from the frozen IL-model approximation used by
-the practical algorithm, and place both in the common bilevel notation of
-Section~\ref{sec:connection}.
+\paragraph{Adaptive subset and online batch selection.}
+Selection methods modify the data actually consumed during optimization.
+Online batch selection prioritizes examples using recently observed losses
+\citep{loshchilov2016online}, importance sampling uses inexpensive proxies for
+per-example gradient norms \citep{katharopoulos2018importance}, and
+GRAD-MATCH periodically chooses subsets whose weighted gradients approximate a
+training or validation gradient \citep{killamsetty2021gradmatch}. RHO-LOSS
+instead ranks a large candidate batch by current loss minus frozen
+irreducible loss and immediately trains on its local top fraction
+\citep{mindermann2022rholoss}. Such algorithms couple a scoring rule to a
+candidate scope, quota, refresh schedule, and optimizer update, so an end-to-end
+comparison cannot identify which choice helps. Our RHO ladder adds global
+scoring, batch-local quota, immediate training, online rescoring, and the
+frozen comparator separately; the matched batch-size sweep further exposes the
+trade-off between local diversity, update granularity, and scoring cost.

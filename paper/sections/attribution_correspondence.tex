@@ -1,0 +1,116 @@
+\section{Popular Attribution Scores as Bilevel Approximations}
+\label{sec:attribution-correspondence}
+
+Our first insight is that several apparently different attribution methods can
+be placed in one-to-one correspondence with standard ways of approximating the
+outer gradient of Eq.~(\ref{eq:bilevel-selection}). The correspondence is made
+at the \emph{same} outer state and for the same $f$ and $g$. Canonical data
+attribution evaluates the all-present state $\vomega=\bm{1}$; later sections
+separately use the budget-feasible state $\vomega^{\mathrm{unif}}$ when the
+goal is to optimize a fixed selection budget.
+
+\begin{table}[h]
+\centering
+\caption{Three attribution families and their corresponding bilevel-gradient
+approximations. Each identity is evaluated at a common reference state.}
+\label{tab:attribution-correspondence}
+\small
+\begin{tabularx}{\textwidth}{l l X}
+\toprule
+Attribution method & Bilevel approximation & Directional identity \\
+\midrule
+Influence Function & implicit differentiation &
+$\bm{s}_{\mathrm{IF}}=-\vg_{\mathrm{IF}}$ \\
+TSLOO / SGD-Influence & gradient unrolling &
+$\sum_t\bm{s}_{\mathrm{TSLOO}}(t)=-\vg_{\mathrm{GU}}$ \\
+Ideal RHO-LOSS & value-function penalty &
+$\bm{s}_{\mathrm{RHO}}\propto-\vg_{\mathrm{VF}}$ \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsection{Implicit differentiation and Influence Functions}
+
+At a lower-level solution $\thetahat(\vomega)$, stationarity gives
+$\nabla_{\vtheta}g(\vomega,\thetahat)=0$. Let
+\begin{equation}
+\rmH(\vomega):=\nabla^2_{\vtheta\vtheta}
+g(\vomega,\thetahat(\vomega)),
+\qquad
+\vq(\vomega):=\nabla_{\vtheta}f(\thetahat(\vomega)).
+\end{equation}
+When $\rmH$ is invertible, implicit differentiation yields
+\begin{equation}
+\vg_{\mathrm{IF}}(\vomega)
+:=-\nabla^2_{\vomega\vtheta}g(\vomega,\thetahat)
+\rmH(\vomega)^{-1}\vq(\vomega).
+\label{eq:if-hypergradient}
+\end{equation}
+For the linear example weights in Eq.~(\ref{eq:fg}), define the validation
+Influence Function score \citep{koh2017influence}
+\begin{equation}
+s_i^{\mathrm{IF}}(\vomega)
+:=\frac{1}{n}\nabla_{\vtheta}\ell(\thetahat;z_i)^\intercal
+\rmH(\vomega)^{-1}\vq(\vomega).
+\label{eq:if-score}
+\end{equation}
+Concatenating coordinates gives
+$\bm{s}_{\mathrm{IF}}(\vomega)=-\vg_{\mathrm{IF}}(\vomega)$. Thus the
+classical influence ranking is precisely the descent direction produced by
+the implicit-differentiation approximation, evaluated canonically at
+$\vomega=\bm{1}$.
+
+\subsection{Gradient unrolling and trajectory-specific influence}
+
+Unrolling replaces the exact lower solution by a finite optimization path,
+\begin{equation}
+\vtheta_{t+1}(\vomega)=\vtheta_t(\vomega)
+-\eta_t\nabla_{\vtheta}g(\vomega,\vtheta_t(\vomega)),
+\qquad t=0,\ldots,T-1.
+\label{eq:unrolled-training}
+\end{equation}
+With $\rmH_t=\nabla^2_{\vtheta\vtheta}g(\vomega,\vtheta_t)$,
+$\rmG_t=\nabla^2_{\vtheta\vomega}g(\vomega,\vtheta_t)$, and
+$\rmJ_t:=\partial\vtheta_t/\partial\vomega^\intercal$, differentiation through
+one update gives
+\begin{equation}
+\rmJ_{t+1}=(\rmI-\eta_t\rmH_t)\rmJ_t-\eta_t\rmG_t,
+\qquad
+\vg_{\mathrm{GU}}(\vomega)=\rmJ_T^\intercal
+\nabla_{\vtheta}f(\vtheta_T).
+\label{eq:gu-recurrence}
+\end{equation}
+For $\rmJ_0=0$, the contribution of example $z_i$ at step $t$ is
+\begin{equation}
+s_i^{\mathrm{TSLOO}}(t)
+:=\frac{\eta_t}{n}\nabla_{\vtheta}\ell(\vtheta_t;z_i)^\intercal
+\left[\prod_{k=t+1}^{T-1}(\rmI-\eta_k\rmH_k)\right]
+\nabla_{\vtheta}f(\vtheta_T).
+\label{eq:tsloo-score}
+\end{equation}
+This is the first-order trajectory-specific leave-one-out score underlying
+SGD-Influence \citep{hara2019sgdinfluence} and subsequent approximate-unrolling
+methods \citep{bae2024source,wang2024temporal}. Summing the occurrence-level
+scores along the same trajectory gives
+\begin{equation}
+\sum_{t=0}^{T-1}\bm{s}_{\mathrm{TSLOO}}(t)
+=-\vg_{\mathrm{GU}}(\vomega).
+\label{eq:tsloo-gu-correspondence}
+\end{equation}
+Unlike Influence Functions, this direction depends on the realized optimizer,
+ordering, and finite training path.
+
+\subsection{Value functions and the branch studied in depth}
+
+The third route replaces the implicit or unrolled hypergradient with a
+value-function penalty. Its two-model direction is exactly a per-example loss
+difference, which is also the ideal RHO-LOSS score. We derive this third
+correspondence in Section~\ref{sec:connection} and then follow it beyond the
+canonical one-shot point into multi-round selection.
+
+The unified claim is about \emph{what each score approximates}, not that the
+finite estimators are numerically identical. Influence Functions assume a
+well-defined local optimum and an inverse Hessian; unrolling targets a realized
+finite trajectory; and the value-function route introduces a penalty and two
+tracked solutions. All three supply one local outer direction. None, by itself,
+solves the constrained outer problem in Eq.~(\ref{eq:bilevel-selection}).

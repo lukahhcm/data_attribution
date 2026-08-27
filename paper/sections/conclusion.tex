@@ -1,15 +1,16 @@
 \section{Conclusion}
 
-The loss difference shared by ideal RHO-LOSS and the F2SA value-function
-construction supplies a precise local bridge between attribution and
-selection. The bridge is conditional: it depends on aligned objectives and
-adequately tracked inner solutions, and practical RHO-LOSS adds a frozen
-comparator approximation as well as a distinct online protocol. The proposed
-fixed-horizon experiment makes the decisive comparison explicit: one-shot
-selection, repeated reset scoring, and persistent continuous optimization are
-evaluated after identical real target training. The complementary RHO ladder
-then separates score fidelity from local quota, immediate updates, online
-rescoring, and batch scale. Together, these tests can establish not only
-whether multi-round selection helps, but whether the gain comes from optimizing
-utility beyond the uniform point or from the practical mechanics of online
+Influence Functions, trajectory-specific unrolling, and ideal RHO-LOSS are not
+isolated attribution principles: they correspond respectively to implicit,
+unrolled, and value-function approximations of a common bilevel outer
+direction. This is the paper's first insight. Its consequence is also shared:
+each attribution method supplies a local direction, not a solution to
+fixed-budget data selection. We investigate that gap through the VF--RHO
+branch, where the strict loss difference and practical online approximation can
+be separated cleanly. The fixed-horizon experiment compares one-shot
+selection, repeated reset scoring, and persistent continuous optimization after
+identical real target training; the RHO ladder then separates score fidelity
+from local quota, immediate updates, online rescoring, and batch scale.
+Together, these tests determine whether multi-round gains come from optimizing
+utility beyond one attribution step or from the practical mechanics of online
 training.

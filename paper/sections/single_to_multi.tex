@@ -1,12 +1,15 @@
 \section{From a Local Attribution Direction to Multi-Round Selection}
 \label{sec:single-to-multi}
 
-Equation~\ref{eq:rho-vf-equivalence} is a local statement: at a fixed
-$\vomega$, a two-model loss difference supplies a descent direction for a
-finite-penalty surrogate. Data selection is instead a constrained, path-
-dependent decision problem. It must specify an initial state, how long the
-real target is trained before the selector changes, whether the same outer
-state is retained, and how a continuous state becomes a discrete subset.
+Every identity in Table~\ref{tab:attribution-correspondence} is local: it
+supplies a direction at a specified $\vomega$ or along one specified inner
+trajectory. We use the VF--RHO correspondence in
+Eq.~\ref{eq:rho-vf-equivalence} to study the next question because its
+continuous state and practical online endpoint can both be updated explicitly.
+Data selection is instead a constrained, path-dependent decision problem. It
+must specify an initial state, how long the real target is trained before the
+selector changes, whether the same outer state is retained, and how a
+continuous state becomes a discrete subset.
 
 \paragraph{A common warm start.}
 All comparisons begin with the same target initialization and the same random

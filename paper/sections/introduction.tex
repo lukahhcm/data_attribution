@@ -7,16 +7,28 @@ example. Selection asks which budget-feasible data should shape an entire
 training trajectory. A score evaluated once at uniform weights can therefore
 be a useful direction without being a solution to the selection problem.
 
-We make this distinction explicit through bilevel optimization over continuous
-example weights. In this coordinate system, the value-function construction of
-F2SA \citep{kwon2023f2sa} produces the difference between losses under two
-lower-level solutions. Idealized RHO-LOSS \citep{mindermann2022rholoss}
-produces the same per-example direction at a fixed outer state. Practical
-RHO-LOSS is farther away: it replaces the updating joint solution with a
-frozen holdout model, scores a batch-local candidate pool, takes a local quota,
-and immediately updates a nonconverged target. These changes can be useful,
-but their effects should not be attributed to the loss-difference formula
-without a controlled decomposition.
+Our first insight is that several popular attribution methods already compute
+approximations to the outer gradient of the same bilevel data-weighting
+problem. Influence Functions \citep{koh2017influence} correspond to implicit
+differentiation of the lower optimum. Trajectory-specific leave-one-out and
+SGD-Influence \citep{hara2019sgdinfluence} correspond to differentiation
+through the finite optimization path. Idealized RHO-LOSS
+\citep{mindermann2022rholoss} corresponds to the value-function approximation
+used by F2SA \citep{kwon2023f2sa}. When their data, objectives, and evaluation
+point coincide, each named attribution score is the negative direction from
+its associated bilevel-gradient approximation. This unification explains both
+their implicit connection and their common limitation: they approximate a
+gradient at one state rather than solve the outer optimization problem.
+
+We develop the third correspondence in depth because it creates a particularly
+clean bridge to practical data selection. The F2SA value-function construction
+produces the difference between losses under two lower-level solutions, while
+idealized RHO-LOSS produces the same per-example direction. Practical RHO-LOSS
+is farther away: it replaces the updating joint solution with a frozen holdout
+model, scores a batch-local candidate pool, takes a local quota, and immediately
+updates a nonconverged target. These changes can be useful, but their effects
+should not be attributed to the loss-difference formula without a controlled
+decomposition.
 
 The empirical question is thus not simply whether a value-function score beats
 RHO-LOSS. It is whether optimizing the same continuous outer state beyond the
@@ -31,13 +43,16 @@ memory from the simpler benefit of rescoring a changed model.
 
 Our contributions are:
 \begin{enumerate}
-    \item We derive, in one native notation, the exact correspondence between
-    the F2SA value-function direction and idealized RHO-LOSS, while marking the
-    assumptions broken by the practical frozen-model estimator.
+    \item We derive, in one notation, a three-way correspondence from popular
+    attribution estimators to bilevel-gradient approximations: Influence
+    Function to implicit differentiation, TSLOO/SGD-Influence to gradient
+    unrolling, and ideal RHO-LOSS to the F2SA value-function direction.
     \item We formulate one-shot attribution and multi-round selection as
     $R=1$ and $R=2,\ldots,5$ instances of one fixed-budget, fixed-horizon
     protocol, with reset and persistent outer states and matched random
-    controls.
+    controls. Canonical Influence Function and TSLOO selectors remain as
+    one-shot attribution baselines; the multi-round study expands the VF--RHO
+    branch.
     \item We separate RHO's score approximation from its training protocol by
     adding global scoring, batch-local quota, immediate update, and online
     rescoring one at a time, then measure how the online batch scale changes

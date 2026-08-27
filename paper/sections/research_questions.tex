@@ -31,8 +31,10 @@ optimizer-step granularity. Batch-size scaling is the priority experiment
 because it simultaneously controls the size of the local ranking pool and the
 number of immediate target updates.
 
-The algebraic correspondence in Section~\ref{sec:connection} is treated as a
-correctness precondition, not a standalone performance RQ. Gradient sign,
-inner tracking, budget projection, and ranking agreement must pass the gates in
-Section~\ref{sec:experiments} before the three questions above receive a
-value-function interpretation.
+The three attribution--approximation correspondences in
+Section~\ref{sec:attribution-correspondence} are the paper's first theoretical
+insight, while the RQs above study their shared one-step limitation through the
+VF--RHO branch. Gradient sign, unrolled-recurrence checks, inner tracking,
+budget projection, and ranking agreement must pass the gates in
+Section~\ref{sec:experiments} before the selection results receive a bilevel
+interpretation.

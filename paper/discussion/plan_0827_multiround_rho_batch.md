@@ -2,6 +2,20 @@
 
 更新日期：2026-08-27。本文件记录本轮论文实验协议更新；根目录 `PLAN.md` 继续作为完整技术规范，不在此覆盖。
 
+## 0. 论文理论范围与必须保留的 one-shot baselines
+
+论文的第一层 insight 不是只讨论 VF--RHO，而是把三类流行 attribution 方法与求解同一个 bilevel data-weighting outer gradient 的三类近似建立一一对应：
+
+| attribution family | bilevel approximation | one-shot method |
+|---|---|---|
+| Influence Function | implicit differentiation | `IF-1` |
+| TSLOO / SGD-Influence | gradient unrolling | `TSLOO-1` |
+| ideal RHO-LOSS | value-function penalty / F2SA | `VF-Persistent-1` / `RHO-Persistent-1` |
+
+理论映射在相同的 `f`、`g`、数据和 reference `omega` 上比较；canonical attribution point 是全 1，固定预算 selection comparison 另行报告 `omega_unif=(B/n)1`，两者不得混写。正式多轮实验只沿 VF--RHO 支线展开，但 `IF-1` 与 `TSLOO-1` 必须保留在论文和 one-shot 实验中。
+
+主矩阵前增加 diagnostic pre-wave：MNIST、CIFAR-10、10% noise、seed 1，对比 `IF-1 / TSLOO-1 / VF-Persistent-1 / RHO-Persistent-1`。`IF-1` 使用 CG iHVP；`TSLOO-1` 在 MNIST 使用完整 recurrence，在 CIFAR 使用预注册 checkpoint approximation。所有方法选一次 Top-B 后从共同 target warm-start 训练到相同 `H`，同时报告 attribution auxiliary compute。
+
 ## 1. 研究问题
 
 1. **RQ1（uniform utility vs. optimized utility）**：一次从均匀权重点出发的 attribution 更新，与沿训练轨迹持续更新 continuous `omega` 相比，哪一个能得到更好的 Top-10% 数据？

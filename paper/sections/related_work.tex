@@ -3,19 +3,19 @@
 \paragraph{Attribution and bilevel example reweighting.}
 Training-data attribution assigns examples credit for a prediction or utility:
 influence functions differentiate an infinitesimal reweighting at a fitted
-model \citep{koh2017influence}, TracIn accumulates first-order influence along
-saved training checkpoints \citep{pruthi2020tracin}, and Data Shapley averages
-marginal utility over data coalitions \citep{ghorbani2019datashapley}. A
-complementary line directly learns training weights from clean validation
-loss, either through a one-step meta-gradient \citep{ren2018reweight} or by
-unrolling an approximate bilevel problem \citep{franceschi2018bilevel}.
-F2SA removes Hessian calculations by tracking a lower solution and a penalized
-joint solution with first-order updates \citep{kwon2023f2sa}. These methods
-differ in utility and approximation, but they all clarify that an attribution
-score is tied to an evaluation point or trajectory. Our question is narrower
-than a new valuation axiom: under a fixed cardinality budget, does maintaining
-and updating the same continuous $\vomega$ improve the subset beyond repeated
-local scores at $\vomega^{\mathrm{unif}}$?
+model \citep{koh2017influence}, while SGD-Influence retraces a realized SGD
+path \citep{hara2019sgdinfluence} and SOURCE combines approximate unrolling
+with an influence-like computation \citep{bae2024source}. TracIn accumulates
+first-order interactions over checkpoints \citep{pruthi2020tracin}, whereas
+Data Shapley averages marginal utility over coalitions
+\citep{ghorbani2019datashapley}. A complementary optimization literature learns
+example weights from validation loss by a one-step meta-gradient
+\citep{ren2018reweight}, unrolled bilevel optimization
+\citep{franceschi2018bilevel}, or F2SA's first-order value-function updates
+\citep{kwon2023f2sa}. Rather than dropping the first two families, our analysis
+identifies Influence Function--implicit differentiation, TSLOO--unrolling, and
+RHO--value-function as parallel correspondences. We then study their common
+one-step limitation through the VF--RHO branch.
 
 \paragraph{Adaptive subset and online batch selection.}
 Selection methods modify the data actually consumed during optimization.

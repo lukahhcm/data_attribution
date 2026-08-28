@@ -148,26 +148,31 @@ the online training protocol.
 
 \subsection{Priority experiment: RHO batch-size scaling}
 
-We define $n_b$ as the selected batch immediately used for one target update
-and set the candidate batch to $n_B=10n_b$. Thus local retention remains 10\%:
+We define $n_b$ as the selected batch immediately used for one target update.
+Ordinarily $n_B=10n_b$, and we sweep this online scale geometrically while
+holding local retention at 10\%:
 \begin{table}[h]
 \centering
-\caption{Online batch scale. The five points reuse one reference-model
-checkpoint within each dataset, split, and seed.}
+\caption{Common geometric portion of the online batch-size axis.}
 \label{tab:rho-batch}
 \small
-\begin{tabular}{rrr}
+\begin{tabular}{rrrr}
 \toprule
-Selected $n_b$ & Candidate $n_B$ & local retention \\
+Selected $n_b$ & Candidate $n_B$ & Selected $n_b$ & Candidate $n_B$ \\
 \midrule
-32 & 320 & 10\% \\
-64 & 640 & 10\% \\
-128 & 1,280 & 10\% \\
-256 & 2,560 & 10\% \\
-512 & 5,120 & 10\% \\
+32 & 320 & 512 & 5,120 \\
+64 & 640 & 1,024 & 10,240 \\
+128 & 1,280 & 2,048 & 20,480 \\
+256 & 2,560 & --- & --- \\
 \bottomrule
 \end{tabular}
 \end{table}
+
+The MNIST axis adds $n_b=4{,}096$ and terminates at the whole-dataset point
+$(n_B,n_b)=(50{,}000,5{,}000)$; CIFAR-10 and CIFAR-100 use the seven common
+points and terminate at $(40{,}000,4{,}000)$ and $(25{,}000,2{,}500)$.
+Thus every axis connects faithful online RHO to its global-batch endpoint.
+
 The final incomplete candidate batch selects the rounded 10\% quota, followed
 by an epoch-level exact-budget correction so that precisely $0.1n$ distinct
 examples are trained on. Increasing $n_b$ holds target examples fixed but
@@ -179,18 +184,17 @@ Every point compares \textbf{RHO-Batch-Faithful} with
 \textbf{Uniform-Batch-Matched}, which shares candidate order, local quota,
 immediate-update timing, target batches, and step counts but replaces ranking
 with uniform sampling. The frozen IL/reference model is always trained with
-batch size 32, and all five online scales for a fixed dataset, seed, and split
-load the same reference checkpoint.
+batch size 32, and the complete online axis for a fixed dataset, seed, and split
+loads the same reference checkpoint.
 
 \subsection{Execution waves, metrics, and decision rules}
 
-A diagnostic pre-wave runs IF-1, TSLOO-1, VF-Persistent-1, and
-RHO-Persistent-1 on MNIST and CIFAR-10, seed 1, to validate the three-family
-one-shot comparison. Wave 1 then runs the priority RHO batch study on MNIST and
-CIFAR-10 with 10\% noise, seed 1, all five batch scales, and both matched
-methods. Wave 2 expands every point to seeds 1--3. Wave 3 checks representative
-points on CIFAR-100 and the clean condition; only development results choose
-those points. Wave 4 launches the VF--RHO block-protocol matrix for
+A seed-1 diagnostic pre-wave runs IF-1, TSLOO-1, VF-Persistent-1, and
+RHO-Persistent-1 on MNIST and CIFAR-10. Wave 1 runs the complete RHO batch axes
+on these datasets with 10\% noise and both matched methods; Wave 2 adds the
+complete CIFAR-100 axis, also at seed 1. Wave 3 expands all curves to seeds
+1--3 and the clean condition; only development results may choose later
+representative points. Wave 4 launches the VF--RHO block matrix for
 $R=1,\ldots,5$.
 
 Primary outcomes are final test accuracy and best development loss. Mechanism

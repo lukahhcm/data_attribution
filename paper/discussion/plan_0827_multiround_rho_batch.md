@@ -78,31 +78,41 @@ alpha_r            = alpha_0 (1+r)^p
 
 ## 5. 优先实验：RHO batch-size scaling
 
-固定 local retention=10%，`n_b` 表示被选择并立即用于一次 target update 的 batch，`n_B=10n_b`：
+固定 local retention=10%，`n_b` 表示被选择并立即用于一次 target update 的 batch。一般令 `n_B=10n_b`，按 2 倍递增扩展在线 batch scale；每个数据集还显式加入 `n_B=n, n_b=0.1n` 的全数据集端点：
 
-| selected `n_b` | candidate `n_B` |
-|---:|---:|
-| 32 | 320 |
-| 64 | 640 |
-| 128 | 1,280 |
-| 256 | 2,560 |
-| 512 | 5,120 |
+| selected `n_b` | candidate `n_B` | local retention |
+|---:|---:|---:|
+| 32 | 320 | 10% |
+| 64 | 640 | 10% |
+| 128 | 1,280 | 10% |
+| 256 | 2,560 | 10% |
+| 512 | 5,120 | 10% |
+| 1,024 | 10,240 | 10% |
+| 2,048 | 20,480 | 10% |
 
-最后一个不完整 candidate batch 按 10% 四舍五入，再执行 epoch exact-budget correction，保证总计恰为 `0.1n` 且无重复。增大 `n_b` 会保持 target examples 不变但减少 optimizer steps；必须同时报告 examples、steps 和 wall-clock。
+最终使用的数据集特定轴为：
+
+| 数据集 | 几何递增的 `n_b` | 全数据集端点 `(n_B,n_b)` |
+|---|---|---|
+| MNIST | 32 / 64 / 128 / 256 / 512 / 1,024 / 2,048 / 4,096 | (50,000, 5,000) |
+| CIFAR-10 | 32 / 64 / 128 / 256 / 512 / 1,024 / 2,048 | (40,000, 4,000) |
+| CIFAR-100 | 32 / 64 / 128 / 256 / 512 / 1,024 / 2,048 | (25,000, 2,500) |
+
+最后一个不完整 candidate batch 按 10% 四舍五入，再执行 epoch exact-budget correction，保证总计恰为 `0.1n` 且无重复。增大 `n_b` 会保持 target examples 不变但减少 optimizer steps；这是 batch-size scaling 干预的一部分，必须同时报告 examples、steps 和 wall-clock，不能把曲线解释为只改变 oversampling diversity。
 
 每一点同时运行：
 
 - `RHO-Batch-Faithful(n_B,n_b)`；
 - `Uniform-Batch-Matched(n_B,n_b)`，共享 candidate order、local budget、立即更新和 target steps，只替换排序。
 
-reference/IL model 的训练 batch 固定为 32；同一 dataset/seed/split 的五个点读取同一个 reference checkpoint。
+reference/IL model 的训练 batch 固定为 32；同一 dataset/seed/split 的完整在线 batch-size 轴读取同一个 reference checkpoint。
 
 执行 waves：
 
-1. MNIST、CIFAR-10，10% noise，seed 1，五个 batch sizes，RHO 与 matched Uniform；
-2. 全部扩展到 seeds 1--3；
-3. CIFAR-100 和 clean setting 验证 development-selected representative points；
-4. 启动 block protocol 的 `R=1..5` 主矩阵。
+1. Wave 1：MNIST、CIFAR-10，10% noise，seed 1，完整 batch-size 轴，RHO 与 matched Uniform；
+2. Wave 2：CIFAR-100，10% noise，seed 1，完整 batch-size 轴；
+3. Wave 3：上述曲线扩展到 seeds 1--3，并补 clean setting；任何后续代表性点选择只用 development；
+4. Wave 4：启动 block protocol 的 `R=1..5` 主矩阵。
 
 指标：final test accuracy、best development loss、selected-noise rate、class entropy、cumulative unique coverage、adjacent turnover、target examples/steps、scoring examples、wall time、peak GPU memory。
 
